@@ -186,6 +186,7 @@ namespace CSMI
             var SecondMaxVal = accelerate.Allocate1D<int>(new Index1D(1));
             var SecondMinVal = accelerate.Allocate1D<int>(new Index1D(1));
             var EntropyBuffer = accelerate.Allocate1D<double>(new Index1D(1));
+            var TestBuffer = accelerate.Allocate1D<double>(new Index1D(1));
             
 
             var GetMaxValKern = accelerate.LoadAutoGroupedStreamKernel<
@@ -217,6 +218,13 @@ namespace CSMI
                 ArrayView2D<double, Stride2D.DenseX>, 
                 ArrayView1D<double, Stride1D.Dense>,
                 int>(CalcJointEntropyKernel);
+
+            var IndexedCalcJointEntropyKern = accelerate.LoadAutoGroupedStreamKernel<Index1D, 
+                ArrayView2D<double, Stride2D.DenseX>, 
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                int>(IndexedCalcJointEntropyKernel);
 
             var setBuffToValueDoubleKern = accelerate.LoadAutoGroupedStreamKernel<
                 Index1D,
@@ -250,13 +258,19 @@ namespace CSMI
 
 
             
-            setBuffToValue2DKern(JointBuffer.Extent.ToIntIndex(), JointBuffer.View, 0.0);
+            //setBuffToValue2DKern(JointBuffer.Extent.ToIntIndex(), JointBuffer.View, 0.0);
             // setBuffToValueDoubleKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, 0.0);
             // setBuffToValueDoubleKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, 0.0);
 
             BuildJointFreqKern(SecondNormBuffer.Extent.ToIntIndex(), FirstNormBuffer.View, SecondNormBuffer.View, JointBuffer.View);
 
-            CalcJointEntropyKern(JointBuffer.Extent.ToIntIndex(), JointBuffer.View, EntropyBuffer.View, firstVector.GetLength(0));
+            //CalcJointEntropyKern(JointBuffer.Extent.ToIntIndex(), JointBuffer.View, EntropyBuffer.View, firstVector.GetLength(0));
+            IndexedCalcJointEntropyKern(SecondNormBuffer.Extent.ToIntIndex(), JointBuffer.View,FirstNormBuffer.View, SecondNormBuffer.View, EntropyBuffer.View, firstVector.GetLength(0));
+
+            // Console.WriteLine("joint");
+            // Console.WriteLine(EntropyBuffer.GetAsArray1D()[0]);
+            // Console.WriteLine(TestBuffer.GetAsArray1D()[0]);
+
             double answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(LOG_BASE);
             accelerate.Dispose();
             return answer;
@@ -278,6 +292,7 @@ namespace CSMI
             var SecondMaxVal = accelerate.Allocate1D<int>(new Index1D(1));
             var SecondMinVal = accelerate.Allocate1D<int>(new Index1D(1));
             var EntropyBuffer = accelerate.Allocate1D<double>(new Index1D(1));
+            var TestBuffer = accelerate.Allocate1D<double>(new Index1D(1));
             
 
             var GetMaxValKern = accelerate.LoadAutoGroupedStreamKernel<
@@ -310,6 +325,14 @@ namespace CSMI
                 ArrayView1D<double, Stride1D.Dense>,
                 ArrayView1D<double, Stride1D.Dense>,
                 int>(CalcConditionalEntropyKernel);
+
+            var IndexedCalcConditionalEntropyKern = accelerate.LoadAutoGroupedStreamKernel<Index1D, 
+                ArrayView2D<double, Stride2D.DenseX>, 
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                int>(IndexedCalcConditionalEntropyKernel);
 
             var setBuffToValueDoubleKern = accelerate.LoadAutoGroupedStreamKernel<
                 Index1D,
@@ -358,7 +381,13 @@ namespace CSMI
             //print2d(JointBuffer.GetAsArray2D());
             // Console.WriteLine("SecondCountMap");
             //print1d(SecondCountMap.GetAsArray1D());
-            CalcConditionalEntropyKern(JointBuffer.Extent.ToIntIndex(), JointBuffer.View, SecondCountMap.View, EntropyBuffer.View, firstVector.GetLength(0));
+            // /CalcConditionalEntropyKern(JointBuffer.Extent.ToIntIndex(), JointBuffer.View, SecondCountMap.View, EntropyBuffer.View, firstVector.GetLength(0));
+
+            IndexedCalcConditionalEntropyKern(SecondNormBuffer.Extent.ToIntIndex(), JointBuffer.View, SecondCountMap.View, FirstNormBuffer.View, SecondNormBuffer.View,EntropyBuffer.View, firstVector.GetLength(0));
+
+            // Console.WriteLine("TESTTT");
+            // Console.WriteLine(EntropyBuffer.GetAsArray1D()[0]);
+            // Console.WriteLine(TestBuffer.GetAsArray1D()[0]);
 
 
             // Console.WriteLine("ENTROPY ARR");
@@ -419,6 +448,15 @@ namespace CSMI
                 ArrayView1D<double, Stride1D.Dense>,
                 int>(CalcMIKernel);
 
+            var IndexedCalcMIKern = accelerate.LoadAutoGroupedStreamKernel<Index1D, 
+                ArrayView2D<double, Stride2D.DenseX>, 
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                int>(IndexedCalcMIKernel);
+
             var setBuffToValueDoubleKern = accelerate.LoadAutoGroupedStreamKernel<
                 Index1D,
                 ArrayView1D<double, Stride1D.Dense>,
@@ -451,7 +489,7 @@ namespace CSMI
 
             var FirstCountMap = accelerate.Allocate1D<double>(new Index1D(firstnumstates));
             var SecondCountMap = accelerate.Allocate1D<double>(new Index1D(secondnumstates));
-            setBuffToValue2DKern(JointBuffer.Extent.ToIntIndex(), JointBuffer.View, 0.0);
+            //setBuffToValue2DKern(JointBuffer.Extent.ToIntIndex(), JointBuffer.View, 0.0);
             // setBuffToValueDoubleKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, 0.0);
             // setBuffToValueDoubleKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, 0.0);
 
@@ -460,7 +498,9 @@ namespace CSMI
             BuildFreqKern(FirstNormBuffer.Extent.ToIntIndex(), FirstNormBuffer.View, FirstCountMap.View);
 
             
-            CalcMIKern(JointBuffer.Extent.ToIntIndex(), JointBuffer.View, FirstCountMap.View,SecondCountMap.View, EntropyBuffer.View, firstVector.GetLength(0));
+            //CalcMIKern(JointBuffer.Extent.ToIntIndex(), JointBuffer.View, FirstCountMap.View,SecondCountMap.View, EntropyBuffer.View, firstVector.GetLength(0));
+
+            IndexedCalcMIKern(SecondNormBuffer.Extent.ToIntIndex(), JointBuffer.View, FirstCountMap.View,SecondCountMap.View,FirstNormBuffer.View, SecondNormBuffer.View, EntropyBuffer.View, firstVector.GetLength(0));
 
 
             
@@ -527,6 +567,22 @@ namespace CSMI
             }
 
         }
+        static void IndexedCalcConditionalEntropyKernel(Index1D index, 
+            ArrayView2D<double, Stride2D.DenseX> FreqView, 
+            ArrayView1D<double, Stride1D.Dense> condView,
+            ArrayView1D<double, Stride1D.Dense> FirstView,
+            ArrayView1D<double, Stride1D.Dense> SecondView,
+            ArrayView1D<double, Stride1D.Dense> entropy,
+            int length){
+            double val;
+            Index2D ind2 = new Index2D((int)FirstView[index], (int)SecondView[index]);
+            if(FreqView[ind2] > 0 && condView[ind2.Y] > 0){
+                val = -1 * ((FreqView[ind2]/(double)length) * Math.Log( (FreqView[ind2]/(double)length) /  (condView[ind2.Y]/(double)length)));
+                val = val / FreqView[ind2];
+                Atomic.Add(ref entropy[new Index1D(0)], val);
+            }
+
+        }
         static void CalcMIKernel(Index2D index, 
             ArrayView2D<double, Stride2D.DenseX> FreqView, 
             ArrayView1D<double, Stride1D.Dense> first,
@@ -540,6 +596,23 @@ namespace CSMI
             }
 
         }
+        static void IndexedCalcMIKernel(Index1D index, 
+            ArrayView2D<double, Stride2D.DenseX> FreqView, 
+            ArrayView1D<double, Stride1D.Dense> first,
+            ArrayView1D<double, Stride1D.Dense> second,
+            ArrayView1D<double, Stride1D.Dense> FirstView,
+            ArrayView1D<double, Stride1D.Dense> SecondView,
+            ArrayView1D<double, Stride1D.Dense> entropy,
+            int length){
+            double val;
+            Index2D ind2 = new Index2D((int)FirstView[index],(int)SecondView[index]);
+            if(FreqView[ind2] > 0 && first[(int)FirstView[index]] > 0 && second[(int)SecondView[index]] > 0){
+                val = ((FreqView[ind2]/(double)length) * Math.Log( ((FreqView[ind2]/(double)length) /  (first[ind2.X]/(double)length))/ (second[ind2.Y]/(double)length)  ));
+                val = val / FreqView[ind2];
+                Atomic.Add(ref entropy[new Index1D(0)], val);
+            }
+
+        }
         static void CalcJointEntropyKernel(Index2D index, 
             ArrayView2D<double, Stride2D.DenseX> FreqView, 
             ArrayView1D<double, Stride1D.Dense> entropy,
@@ -547,6 +620,22 @@ namespace CSMI
             double val;
             if(FreqView[index] > 0){
                 val = -1 * (FreqView[index]/(double)length) * Math.Log( (FreqView[index]/(double)length) );
+                Atomic.Add(ref entropy[new Index1D(0)], val);
+            }
+
+        }
+
+        static void IndexedCalcJointEntropyKernel(Index1D index, 
+            ArrayView2D<double, Stride2D.DenseX> FreqView, 
+            ArrayView1D<double, Stride1D.Dense> FirstView,
+            ArrayView1D<double, Stride1D.Dense> SecondView,
+            ArrayView1D<double, Stride1D.Dense> entropy,
+            int length){
+            double val;
+            Index2D ind2 = new Index2D((int)FirstView[index],(int)SecondView[index]);
+            if(FreqView[ind2] > 0){
+                val = -1 * (FreqView[ind2]/(double)length) * Math.Log( (FreqView[ind2]/(double)length) );
+                val = val/FreqView[ind2];
                 Atomic.Add(ref entropy[new Index1D(0)], val);
             }
 
@@ -569,7 +658,11 @@ namespace CSMI
             
 
         }
-        
+        static void InsertBufferIntoTree(Index1D index,
+            ArrayView1D<int, Stride1D.Dense> View,
+            ArrayView1D<int, Stride1D.Dense> Tree){
+
+        }
         static void InitMaxMinKernel(Index1D index, 
             ArrayView1D<double, Stride1D.Dense> aView,
             ArrayView1D<int, Stride1D.Dense> MaxVal,
@@ -672,6 +765,10 @@ namespace CSMI
             
             
         }
+
+        
+
+
         void print1d(int[] array)
         {
             Console.Write("[");
@@ -719,7 +816,7 @@ namespace CSMI
             }
             double[] b = new double[length];
             for (int i = 0; i < length; i++) {
-              b[i] = rand.NextDouble() * 10000;
+              b[i] = rand.NextDouble() * 100000;
             }
             double[] c = new double[length];
             for (int i = 0; i < length; i++) {
@@ -754,7 +851,7 @@ namespace CSMI
             stop.Reset();
 
             stop.Start();
-            calculateConditionalMutualInformation(a,b,c);
+            //calculateConditionalMutualInformation(a,b,c);
             stop.Stop();
             Console.Write("Elapsed time for Conditional Mutual Information: ");
             Console.WriteLine(stop.ElapsedMilliseconds);
@@ -808,9 +905,9 @@ namespace CSMI
                 ArrayView1D<double, Stride1D.Dense>, int>(
                 CalcEntropyKernel);
 
-            for (int i = 1; i < 8; i++){
-              m.test((int)Math.Pow(10,i));
-            }
+            // for (int i = 1; i < 11; i++){
+            //   m.test((int)Math.Pow(10,i));
+            // }
             // InitMaxMinKern(MVBuffer.Extent.ToIntIndex(), MVBuffer.View, MaxVal.View, MinVal.View);
             // Console.WriteLine(MaxVal.GetAsArray1D()[0]);
             // Console.WriteLine(MinVal.GetAsArray1D()[0]);
@@ -826,7 +923,12 @@ namespace CSMI
             // m.print1d(EntropyBuffer.GetAsArray1D());
             Console.WriteLine(m.calculateMutualInformation(a,b));
             Console.WriteLine("MI ^^^");
+
+            Console.WriteLine(m.calculateConditionalEntropy(a,b));
+            Console.WriteLine("Conditional Entropy ^^^");
+            // /Console.ReadLine();
             Console.WriteLine(m.calculateJointEntropy(a,b));
+            Console.WriteLine("JOINT ENTROPY^^^");
             Console.WriteLine(m.calculateEntropy(b));
 
             m.mergeArrays(a,b,ref c);
