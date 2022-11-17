@@ -15,8 +15,24 @@ using System.Globalization;
 using CsvHelper;
 using CsvHelper.Configuration;
 
+using Microsoft.Data.Analysis;
+
 namespace CSMI
 {
+    public class OutputGroup{
+        string id1;
+        string id2;
+        double MIVal;
+        public OutputGroup(string id1, string id2, double MI){
+            this.id1 = id1;
+            this.id2 = id2;
+            this.MIVal = MI;
+        }
+        public override string ToString()
+        {
+            return "(" + this.id1 + ", " + this.id2 + "): " + this.MIVal;
+        }
+    }
 	public class MI{
         const double LOG_BASE = 2.0;
         const int MAX_YDIM = 65535;
@@ -868,7 +884,614 @@ namespace CSMI
 
         }
 
+        public OutputGroup[] findBestCondMutInf(double[] targetvar, List<double[]> arr, string[] columnnames){
 
+            Stopwatch watch = new Stopwatch();
+            watch.Start();
+            Accelerator accelerate = this.dev.CreateAccelerator(this.context);
+            var FirstBuffer = accelerate.Allocate1D<double>(new Index1D(arr[0].GetLength(0)));
+            var SecondBuffer = accelerate.Allocate1D<double>(new Index1D(targetvar.GetLength(0)));
+            var CondBuffer = accelerate.Allocate1D<double>(new Index1D(arr[0].GetLength(0)));
+            //var testIndex = new LongIndex2D(10000, 1000000);
+            var FirstNormBuffer = accelerate.Allocate1D<double>(new Index1D(arr[0].GetLength(0)));
+            var SecondNormBuffer = accelerate.Allocate1D<double>(new Index1D(targetvar.GetLength(0)));
+            var CondNormBuffer = accelerate.Allocate1D<double>(new Index1D(arr[0].GetLength(0)));
+
+            var mergedBuffer = accelerate.Allocate1D<double>(new Index1D(arr[0].GetLength(0)));
+            //var AdjMergeBuffer = accelerate.Allocate1D<double>(new Index1D(firstVector.GetLength(0)));
+
+            var MergeNormBuffer = accelerate.Allocate1D<double>(new Index1D(arr[0].GetLength(0)));
+
+            //FirstBuffer.CopyFromCPU(firstVector);
+            SecondBuffer.CopyFromCPU(targetvar);
+            //CondBuffer.CopyFromCPU(conditionVector);
+
+            var FirstMaxVal = accelerate.Allocate1D<int>(new Index1D(1));
+            var FirstMinVal = accelerate.Allocate1D<int>(new Index1D(1));
+
+            var SecondMaxVal = accelerate.Allocate1D<int>(new Index1D(1));
+            var SecondMinVal = accelerate.Allocate1D<int>(new Index1D(1));
+
+            var CondMaxVal = accelerate.Allocate1D<int>(new Index1D(1));
+            var CondMinVal = accelerate.Allocate1D<int>(new Index1D(1));
+
+            var MergeMaxVal = accelerate.Allocate1D<int>(new Index1D(1));
+            var MergeMinVal = accelerate.Allocate1D<int>(new Index1D(1));
+
+            var PreMergeMaxVal = accelerate.Allocate1D<int>(new Index1D(1));
+            var PreMergeMinVal = accelerate.Allocate1D<int>(new Index1D(1));
+
+            var EntropyBuffer1 = accelerate.Allocate1D<double>(new Index1D(1));
+            var EntropyBuffer2 = accelerate.Allocate1D<double>(new Index1D(1));
+
+            var StateCount = accelerate.Allocate1D<int>(new Index1D(1));
+
+            var CountNonNaN = accelerate.Allocate1D<double>(new Index1D(1));
+            var HolderBuffer = accelerate.Allocate1D<double>(new Index1D(1));
+
+
+            int firstnumstates;
+            int secondnumstates;
+
+            int condnumstates;
+
+            int mergenumstates;
+            double ent1;
+            double ent2;
+
+            int premergenumstates;
+            var StateMap = accelerate.Allocate2DDenseX<int>(new Index2D(1, 1));
+
+            var JointBuffer1 = accelerate.Allocate2DDenseX<double>(new Index2D(1, 1));
+            var JointBuffer2 = accelerate.Allocate2DDenseX<double>(new Index2D(1, 1));
+
+                        //EntropyBuffer1.GetAsArray1D();
+
+                        
+                        //var SecondCountMap = accelerate.Allocate1D<double>(new Index1D(secondnumstates));
+            var CondCountMap = accelerate.Allocate1D<double>(new Index1D(1));
+            var MergeCountMap = accelerate.Allocate1D<double>(new Index1D(1));
+
+            var TempBuffer = accelerate.Allocate1D<double>(new Index1D(1));
+            var TempBuffer2 = accelerate.Allocate1D<double>(new Index1D(1));
+
+
+
+            var GetMaxValKern = accelerate.LoadAutoGroupedStreamKernel<
+                Index1D,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<int, Stride1D.Dense>,
+                ArrayView1D<int, Stride1D.Dense>>(TestGetMaxMinValKernal);
+            var InitMaxMinKern = accelerate.LoadAutoGroupedStreamKernel<
+                Index1D,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<int, Stride1D.Dense>,
+                ArrayView1D<int, Stride1D.Dense>>(InitMaxMinKernel);
+            var normalizeArrayKern= accelerate.LoadAutoGroupedStreamKernel<Index1D,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<int, Stride1D.Dense>>(normalizeArrayKernel);
+            var mergeArraysKern= accelerate.LoadAutoGroupedStreamKernel<Index1D,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView2D<int, Stride2D.DenseX>,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<int, Stride1D.Dense>,
+                int, int>(mergeArraysAdjKernel);
+            var BuildJointFreqKern= accelerate.LoadAutoGroupedStreamKernel<Index1D, 
+                ArrayView1D<double, Stride1D.Dense>, 
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView2D<double, Stride2D.DenseX>>(BuildJointFreqKernel);
+
+            var setBuffToValue2DKern = accelerate.LoadAutoGroupedStreamKernel<
+                Index2D,
+                ArrayView2D<double, Stride2D.DenseX>,
+                double>(setBuffToValue2DKernal);
+
+            var setBuffToValue2DIntKern = accelerate.LoadAutoGroupedStreamKernel<
+                Index2D,
+                ArrayView2D<int, Stride2D.DenseX>,
+                int>(setBuffToValue2DIntKernal);
+
+            var CalcConditionalEntropyKern = accelerate.LoadAutoGroupedStreamKernel<Index2D, 
+                ArrayView2D<double, Stride2D.DenseX>, 
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                int>(CalcConditionalEntropyKernel);
+
+            var IndexedCalcConditionalEntropyKern = accelerate.LoadAutoGroupedStreamKernel<Index1D, 
+                ArrayView2D<double, Stride2D.DenseX>, 
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                int>(IndexedCalcConditionalEntropyKernel);
+
+            var setBuffToValueDoubleKern = accelerate.LoadAutoGroupedStreamKernel<
+                Index1D,
+                ArrayView1D<double, Stride1D.Dense>,
+                double>(
+                setBuffToValueDoubleKernal);
+
+            var setBuffToValueKern = accelerate.LoadAutoGroupedStreamKernel<
+                Index1D,
+                ArrayView1D<int, Stride1D.Dense>,
+                int>(
+                setBuffToValueKernal);
+
+            var BuildFreqKern = accelerate.LoadAutoGroupedStreamKernel<
+                Index1D,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>>(
+                BuildFreqAdjKernel);
+
+        
+
+            var RefactorPart1Kern = accelerate.LoadAutoGroupedStreamKernel<
+                Index1D,
+                ArrayView1D<double, Stride1D.Dense>,
+                int>(
+                refactorKernal);
+
+            var refactorPart1Phase1Kern = accelerate.LoadAutoGroupedStreamKernel<
+                Index1D,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>>(
+                refactorPart1Phase1Kernal);
+
+            var refactorPart1Phase2Kern = accelerate.LoadAutoGroupedStreamKernel<
+                Index1D,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>>(
+                refactorPart1Phase2Kernal);
+
+
+            var refactorPart2Phase1Kern = accelerate.LoadAutoGroupedStreamKernel<
+                Index1D,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>
+                >(
+                refactorPart2Phase1Kernal);
+
+            var refactorPart2Phase2Kern = accelerate.LoadAutoGroupedStreamKernel<
+                Index1D,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>
+                >(
+                refactorPart2Phase2Kernal);
+
+            var countnonNaNKern = accelerate.LoadAutoGroupedStreamKernel<Index1D,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>>(countnonNaN);
+
+            List<OutputGroup> output = new List<OutputGroup>();
+
+            for(int i = 0; i < columnnames.GetLength(0)-1; i++){
+                setBuffToValueDoubleKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, 0.0);
+                Console.WriteLine(columnnames[i]);
+                Console.ReadLine();
+                FirstBuffer.CopyFromCPU(arr[i]);
+
+                for(int j = 0; j < columnnames.GetLength(0)-1; j++){
+                    Console.Write("|");
+                    if(!( i == j)){
+
+                        setBuffToValueDoubleKern(CondBuffer.Extent.ToIntIndex(), CondBuffer.View, 0.0);
+
+                        CondBuffer.CopyFromCPU(arr[j]);
+                        
+                        setBuffToValueKern(FirstMaxVal.Extent.ToIntIndex(), FirstMaxVal.View, 0);
+                        setBuffToValueKern(FirstMinVal.Extent.ToIntIndex(), FirstMinVal.View, 0);
+
+                        setBuffToValueKern(SecondMaxVal.Extent.ToIntIndex(), SecondMaxVal.View, 0);
+                        setBuffToValueKern(SecondMinVal.Extent.ToIntIndex(), SecondMinVal.View, 0);
+
+                        setBuffToValueKern(CondMaxVal.Extent.ToIntIndex(), CondMaxVal.View, 0);
+                        setBuffToValueKern(CondMinVal.Extent.ToIntIndex(), CondMinVal.View, 0);
+
+                        setBuffToValueKern(PreMergeMaxVal.Extent.ToIntIndex(), PreMergeMaxVal.View, 0);
+                        setBuffToValueKern(PreMergeMinVal.Extent.ToIntIndex(), PreMergeMinVal.View, 0);
+
+                        setBuffToValueKern(MergeMaxVal.Extent.ToIntIndex(), MergeMaxVal.View, 0);
+                        setBuffToValueKern(MergeMinVal.Extent.ToIntIndex(), MergeMinVal.View, 0);
+
+                        setBuffToValueDoubleKern(EntropyBuffer1.Extent.ToIntIndex(), EntropyBuffer1.View, 0.0);
+                        setBuffToValueDoubleKern(EntropyBuffer2.Extent.ToIntIndex(), EntropyBuffer2.View, 0.0);
+
+                        setBuffToValueDoubleKern(CountNonNaN.Extent.ToIntIndex(), CountNonNaN.View, 0.0);
+                        setBuffToValueDoubleKern(HolderBuffer.Extent.ToIntIndex(), HolderBuffer.View, 0.0);
+                        setBuffToValueDoubleKern(mergedBuffer.Extent.ToIntIndex(), mergedBuffer.View, 0.0);
+
+
+                        setBuffToValueDoubleKern(FirstNormBuffer.Extent.ToIntIndex(), FirstNormBuffer.View, 0.0);
+
+                        setBuffToValueDoubleKern(SecondNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, 0.0);
+
+                        setBuffToValueDoubleKern(CondNormBuffer.Extent.ToIntIndex(), CondNormBuffer.View, 0.0);
+
+
+
+
+                        setBuffToValueKern(StateCount.Extent.ToIntIndex(), StateCount.View, 0);
+
+
+
+
+
+
+                        InitMaxMinKern(FirstMaxVal.Extent.ToIntIndex(), FirstBuffer.View, FirstMaxVal.View, FirstMinVal.View);
+                        GetMaxValKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, FirstMaxVal.View, FirstMinVal.View);
+
+                        InitMaxMinKern(SecondMaxVal.Extent.ToIntIndex(), SecondBuffer.View, SecondMaxVal.View, SecondMinVal.View);
+                        GetMaxValKern(SecondBuffer.Extent.ToIntIndex(), SecondBuffer.View, SecondMaxVal.View, SecondMinVal.View);
+                        //print1d(CondBuffer.GetAsArray1D());
+                        InitMaxMinKern(CondMaxVal.Extent.ToIntIndex(), CondBuffer.View, CondMaxVal.View, CondMinVal.View);
+                        GetMaxValKern(CondBuffer.Extent.ToIntIndex(), CondBuffer.View, CondMaxVal.View, CondMinVal.View);
+
+                        normalizeArrayKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, FirstNormBuffer.View, FirstMinVal.View);
+                        normalizeArrayKern(SecondBuffer.Extent.ToIntIndex(), SecondBuffer.View, SecondNormBuffer.View, SecondMinVal.View);
+                        normalizeArrayKern(CondBuffer.Extent.ToIntIndex(), CondBuffer.View, CondNormBuffer.View, CondMinVal.View);
+                        // accelerate.DefaultStream.Synchronize();
+
+                        // watch.Stop();
+                        // //RefactorPart1TestKern(testIndex, FirstBuffer.View, SecondBuffer.View);
+                        // Console.WriteLine("MaxMin ETC: ");
+
+                        // Console.WriteLine(watch.ElapsedMilliseconds);
+                        // watch.Reset();
+
+                        // accelerate.DefaultStream.Synchronize();
+                        // watch.Start();
+
+                        firstnumstates = FirstMaxVal.GetAsArray1D()[0];           
+                        secondnumstates = SecondMaxVal.GetAsArray1D()[0];
+                        condnumstates = CondMaxVal.GetAsArray1D()[0];
+
+                        Console.WriteLine("NumStates");
+                        Console.WriteLine(firstnumstates);
+                        Console.WriteLine(secondnumstates);
+                        Console.WriteLine(condnumstates);
+
+                        StateMap.Dispose();
+                        StateMap = accelerate.Allocate2DDenseX<int>(new Index2D(firstnumstates + 1, secondnumstates+ 1)); // accelerate.Allocate1D<int>(new Index1D((firstnumstates + 1)*(secondnumstates+ 1)));
+                        //outputVector = mergedBuffer.GetAsArray1D();
+                        setBuffToValue2DIntKern(StateMap.Extent.ToIntIndex(), StateMap.View, 0);
+                        setBuffToValueKern(StateCount.Extent.ToIntIndex(), StateCount.View, 1);
+                        //print1d(FirstNormBuffer.GetAsArray1D());
+                        premergenumstates = PreMergeMaxVal.GetAsArray1D()[0];
+
+                        //print1d(SecondNormBuffer.GetAsArray1D());
+                        //Console.ReadLine();
+                        Console.WriteLine(firstnumstates);
+                        Console.WriteLine(secondnumstates);
+                        //print1d(FirstNormBuffer.GetAsArray1D());
+                        Console.WriteLine("WHy");
+
+                        //print1d(SecondNormBuffer.GetAsArray1D());
+                        
+                        mergeArraysKern(mergedBuffer.Extent.ToIntIndex(), FirstNormBuffer.View, CondNormBuffer.View, StateMap.View, mergedBuffer.View,StateCount.View, firstnumstates, FirstNormBuffer.Extent.ToIntIndex().X);
+                       // mergeArraysKern(StateCount.Extent.ToIntIndex(), FirstNormBuffer.View, SecondNormBuffer.View, StateMap.View, mergedBuffer.View,StateCount.View, firstnumstates, FirstNormBuffer.Extent.ToIntIndex().X);
+
+                        //// TO SHRINK INPUTS
+                        // TempBuffer.Dispose();
+
+                        // TempBuffer = accelerate.Allocate1D<double>(new Index1D(firstnumstates +1));
+                        // setBuffToValueDoubleKern(TempBuffer.Extent.ToIntIndex(), TempBuffer.View, 0.0);
+
+                        // TempBuffer2.Dispose();
+
+                        // TempBuffer2 = accelerate.Allocate1D<double>(new Index1D(firstnumstates +1));
+                        // Console.WriteLine("Pre");
+                        // Console.WriteLine("FirstNorm");
+                        // print1d(FirstNormBuffer.GetAsArray1D());
+                        // Console.WriteLine("TempBuffer");
+                        // print1d(TempBuffer.GetAsArray1D());
+                        // refactorPart1Phase1Kern(FirstNormBuffer.Extent.ToIntIndex(), FirstNormBuffer.View, TempBuffer.View);
+                        // Console.WriteLine("P1PHASE1");
+
+                        // Console.WriteLine("FirstNorm");
+                        // print1d(FirstNormBuffer.GetAsArray1D());
+                        // Console.WriteLine("TempBuffer2");
+                        // print1d(TempBuffer.GetAsArray1D());
+                        
+
+                        // refactorPart1Phase2Kern(FirstNormBuffer.Extent.ToIntIndex(), FirstNormBuffer.View, TempBuffer.View);
+                        // Console.WriteLine("P1PHASE2");
+
+                        // Console.WriteLine("FirstNorm");
+                        // print1d(FirstNormBuffer.GetAsArray1D());
+                        // Console.WriteLine("TempBuffer");
+                        // print1d(TempBuffer.GetAsArray1D());
+                        
+                        // setBuffToValueDoubleKern(TempBuffer2.Extent.ToIntIndex(), TempBuffer2.View, 1.0);
+
+                        // setBuffToValueDoubleKern(HolderBuffer.Extent.ToIntIndex(), HolderBuffer.View, 1.0);
+
+                        // refactorPart2Phase1Kern(FirstNormBuffer.Extent.ToIntIndex(), FirstNormBuffer.View, TempBuffer.View, TempBuffer2.View, HolderBuffer.View);
+                        // Console.WriteLine("P2PHASE1");
+
+                        // Console.WriteLine("FirstNorm");
+                        // print1d(FirstNormBuffer.GetAsArray1D());
+                        // Console.WriteLine("TempBuffer");
+                        // print1d(TempBuffer.GetAsArray1D());
+                        // Console.WriteLine("TempBuffer2");
+                        // print1d(TempBuffer2.GetAsArray1D());
+                        // Console.WriteLine("HolderBuffer");
+                        // print1d(HolderBuffer.GetAsArray1D());
+                        
+                        
+
+                        // refactorPart2Phase2Kern(FirstNormBuffer.Extent.ToIntIndex(), FirstNormBuffer.View, TempBuffer.View);
+                        // Console.WriteLine("P2PHASE2");
+
+                        // Console.WriteLine("FirstNorm");
+                        // print1d(FirstNormBuffer.GetAsArray1D());
+                        // Console.WriteLine("TempBuffer2");
+                        // print1d(TempBuffer.GetAsArray1D());
+                        // Console.WriteLine("HolderBuffer");
+                        // print1d(HolderBuffer.GetAsArray1D());
+
+                        // setBuffToValueKern(FirstMaxVal.Extent.ToIntIndex(), FirstMaxVal.View, 0);
+                        // setBuffToValueKern(FirstMinVal.Extent.ToIntIndex(), FirstMinVal.View, 0);
+                        // InitMaxMinKern(FirstMaxVal.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
+                        // GetMaxValKern(FirstNormBuffer.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
+                        // firstnumstates = FirstMaxVal.GetAsArray1D()[0];           
+
+// ///////
+//                         TempBuffer.Dispose();
+
+//                         TempBuffer = accelerate.Allocate1D<double>(new Index1D(secondnumstates +1));
+//                         TempBuffer2.Dispose();
+
+//                         TempBuffer2 = accelerate.Allocate1D<double>(new Index1D(secondnumstates +1));
+                       
+//                         refactorPart1Phase1Kern(SecondNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, TempBuffer.View);
+                        
+
+//                         refactorPart1Phase2Kern(SecondNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, TempBuffer.View);
+                        
+//                         setBuffToValueDoubleKern(TempBuffer2.Extent.ToIntIndex(), TempBuffer2.View, 1.0);
+
+//                         setBuffToValueDoubleKern(HolderBuffer.Extent.ToIntIndex(), HolderBuffer.View, 1.0);
+
+//                         refactorPart2Phase1Kern(SecondNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, TempBuffer.View, TempBuffer2.View, HolderBuffer.View);
+                        
+
+//                         refactorPart2Phase2Kern(SecondNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, TempBuffer.View);
+
+//                         setBuffToValueKern(SecondMaxVal.Extent.ToIntIndex(), SecondMaxVal.View, 0);
+//                         setBuffToValueKern(SecondMinVal.Extent.ToIntIndex(), SecondMinVal.View, 0);
+//                         InitMaxMinKern(SecondMaxVal.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
+//                         GetMaxValKern(SecondNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
+//                         secondnumstates = SecondMaxVal.GetAsArray1D()[0];           
+
+//////////////
+
+                        // TempBuffer.Dispose();
+
+                        // TempBuffer = accelerate.Allocate1D<double>(new Index1D(condnumstates +1));
+                        // TempBuffer2.Dispose();
+
+                        // TempBuffer2 = accelerate.Allocate1D<double>(new Index1D(condnumstates +1));
+                       
+                        // refactorPart1Phase1Kern(CondNormBuffer.Extent.ToIntIndex(), CondNormBuffer.View, TempBuffer.View);
+                        
+
+                        // refactorPart1Phase2Kern(CondNormBuffer.Extent.ToIntIndex(), CondNormBuffer.View, TempBuffer.View);
+                        
+                        // setBuffToValueDoubleKern(TempBuffer2.Extent.ToIntIndex(), TempBuffer2.View, 1.0);
+
+                        // setBuffToValueDoubleKern(HolderBuffer.Extent.ToIntIndex(), HolderBuffer.View, 1.0);
+
+                        // refactorPart2Phase1Kern(CondNormBuffer.Extent.ToIntIndex(), CondNormBuffer.View, TempBuffer.View, TempBuffer2.View, HolderBuffer.View);
+                        
+
+                        // refactorPart2Phase2Kern(CondNormBuffer.Extent.ToIntIndex(), CondNormBuffer.View, TempBuffer.View);
+
+                        // setBuffToValueKern(CondMaxVal.Extent.ToIntIndex(), CondMaxVal.View, 0);
+                        // setBuffToValueKern(CondMinVal.Extent.ToIntIndex(), CondMinVal.View, 0);
+                        // InitMaxMinKern(CondMaxVal.Extent.ToIntIndex(), CondNormBuffer.View, CondMaxVal.View, CondMinVal.View);
+                        // GetMaxValKern(CondNormBuffer.Extent.ToIntIndex(), CondNormBuffer.View, CondMaxVal.View, CondMinVal.View);
+                        // condnumstates = CondMaxVal.GetAsArray1D()[0];         
+
+
+
+///////// TO SHRINK INPUTS
+
+
+                        //premergenumstates = PreMergeMaxVal.GetAsArray1D()[0];
+                        print1d(StateCount.GetAsArray1D());
+                        Console.WriteLine("What");
+                        StateMap.Dispose();
+
+                        //outputVector = mergedBuffer.GetAsArray1D();
+                        // print1d(outputVector);
+                        // Console.WriteLine("InHere");
+                        // print1d(SecondNormBuffer.GetAsArray1D());
+                        // print1d(FirstNormBuffer.GetAsArray1D());
+                        //print1d(mergedBuffer.GetAsArray1D());
+                        // Console.ReadLine();
+                        InitMaxMinKern(PreMergeMaxVal.Extent.ToIntIndex(), mergedBuffer.View, PreMergeMaxVal.View, PreMergeMinVal.View);
+                        //premergenumstates = PreMergeMaxVal.GetAsArray1D()[0];
+
+                        GetMaxValKern(mergedBuffer.Extent.ToIntIndex(), mergedBuffer.View, PreMergeMaxVal.View, PreMergeMinVal.View);
+                        
+                        premergenumstates = PreMergeMaxVal.GetAsArray1D()[0];
+                        // if(premergenumstates > 10000){
+                        //     Console.WriteLine("Bug tedsting");
+                        //     Console.WriteLine(i);
+                        //     Console.WriteLine(j);
+                        //     print1d(mergedBuffer.GetAsArray1D());
+                        //     print1d(FirstNormBuffer.GetAsArray1D());
+
+                        //     print1d(SecondNormBuffer.GetAsArray1D());
+
+                        //     Console.ReadLine();
+                        //     //1079803904
+                        // }
+                        TempBuffer.Dispose();
+
+                        TempBuffer = accelerate.Allocate1D<double>(new Index1D(premergenumstates +1));
+                        TempBuffer2.Dispose();
+
+                        TempBuffer2 = accelerate.Allocate1D<double>(new Index1D(premergenumstates +1));
+                       
+                        refactorPart1Phase1Kern(mergedBuffer.Extent.ToIntIndex(), mergedBuffer.View, TempBuffer.View);
+                        
+
+                        refactorPart1Phase2Kern(mergedBuffer.Extent.ToIntIndex(), mergedBuffer.View, TempBuffer.View);
+                        
+                        setBuffToValueDoubleKern(TempBuffer2.Extent.ToIntIndex(), TempBuffer2.View, 1.0);
+
+                        setBuffToValueDoubleKern(HolderBuffer.Extent.ToIntIndex(), HolderBuffer.View, 1.0);
+
+                        refactorPart2Phase1Kern(mergedBuffer.Extent.ToIntIndex(), mergedBuffer.View, TempBuffer.View, TempBuffer2.View, HolderBuffer.View);
+                        
+
+                        refactorPart2Phase2Kern(mergedBuffer.Extent.ToIntIndex(), mergedBuffer.View, TempBuffer.View);
+
+                        //print1d(mergedBuffer.GetAsArray1D());
+                        //Console.ReadLine();
+                        //AdjMergeBuffer.CopyFromCPU(refactorToMinimizeSize(mergedBuffer.GetAsArray1D()));
+
+                        //print1d(mergedBuffer.GetAsArray1D());
+                        //accelerate.DefaultStream.Synchronize();
+
+                        //watch.Stop();
+
+                        //Console.WriteLine("Refactor Arrs Part2:");
+                        ent1 = EntropyBuffer1.GetAsArray1D()[0] / Math.Log(LOG_BASE);
+
+                        //Console.WriteLine(watch.ElapsedMilliseconds);
+                        //watch.Reset();
+                        InitMaxMinKern(MergeMaxVal.Extent.ToIntIndex(), mergedBuffer.View, MergeMaxVal.View, MergeMinVal.View);
+                        GetMaxValKern(mergedBuffer.Extent.ToIntIndex(), mergedBuffer.View, MergeMaxVal.View, MergeMinVal.View);
+                        //print1d(MergeMaxVal.GetAsArray1D());
+
+                        // print1d(MergeMaxVal.GetAsArray1D());
+                        // print1d(MergeMinVal.GetAsArray1D());
+                        // print1d(mergedBuffer.GetAsArray1D());
+                        // Console.ReadLine();
+
+                        normalizeArrayKern(mergedBuffer.Extent.ToIntIndex(), mergedBuffer.View, MergeNormBuffer.View, MergeMinVal.View);
+
+                        mergenumstates = MergeMaxVal.GetAsArray1D()[0];
+                        Console.WriteLine("Merge sTates");
+                        Console.WriteLine(mergenumstates);
+                        Console.WriteLine(premergenumstates);
+
+
+                        setBuffToValueDoubleKern(CountNonNaN.Extent.ToIntIndex(), CountNonNaN.View, 1.0);
+                        countnonNaNKern(mergedBuffer.Extent.ToIntIndex(), mergedBuffer.View, CountNonNaN.View);
+
+                        ent1 = EntropyBuffer1.GetAsArray1D()[0] / Math.Log(LOG_BASE);
+
+                        // Console.WriteLine("NumStates");
+                        // Console.WriteLine(secondnumstates);
+
+                        // Console.WriteLine(condnumstates);
+
+                        // Console.WriteLine(mergenumstates);
+                        // Console.WriteLine(MergeMinVal.GetAsArray1D()[0]);
+                        // Console.WriteLine("PreMergeNumStates");
+                        // Console.WriteLine(premergenumstates);
+                        
+
+                        // Console.WriteLine(CountNonNaN.GetAsArray1D()[0]);
+
+
+                        //print1d(mergedBuffer.GetAsArray1D());
+                        //Console.ReadLine();
+                        JointBuffer1.Dispose();
+                        JointBuffer2.Dispose();
+                        CondCountMap.Dispose();
+                        MergeCountMap.Dispose();
+                        Console.WriteLine(firstnumstates);
+                        Console.WriteLine(secondnumstates);
+                        Console.WriteLine(condnumstates);
+                        JointBuffer1 = accelerate.Allocate2DDenseX<double>(new Index2D(secondnumstates +1, condnumstates+1));
+                        JointBuffer2 = accelerate.Allocate2DDenseX<double>(new Index2D(secondnumstates +1, mergenumstates+1));
+
+                        //EntropyBuffer1.GetAsArray1D();
+
+                        
+                        //var SecondCountMap = accelerate.Allocate1D<double>(new Index1D(secondnumstates));
+                        //Console.WriteLine(condnumstates);
+                        CondCountMap = accelerate.Allocate1D<double>(new Index1D(condnumstates));
+                        MergeCountMap = accelerate.Allocate1D<double>(new Index1D(mergenumstates));
+
+                        // print1d(CondNormBuffer.GetAsArray1D());
+                        // print1d(MergeNormBuffer.GetAsArray1D());
+
+                        BuildJointFreqKern(CondNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, CondNormBuffer.View, JointBuffer1.View);
+                        //EntropyBuffer1.GetAsArray1D();
+                        //EntropyBuffer1.GetAsArray1D();
+                        //ent1 = EntropyBuffer1.GetAsArray1D()[0] / Math.Log(LOG_BASE);
+
+                        BuildJointFreqKern(MergeNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, MergeNormBuffer.View, JointBuffer2.View);
+                        //EntropyBuffer1.GetAsArray1D();
+
+                        //EntropyBuffer1.GetAsArray1D();
+                        //ent1 = EntropyBuffer1.GetAsArray1D()[0] / Math.Log(LOG_BASE);
+
+                        BuildFreqKern(CondNormBuffer.Extent.ToIntIndex(), CondNormBuffer.View, CondCountMap.View);
+                        //ent1 = EntropyBuffer1.GetAsArray1D()[0] / Math.Log(LOG_BASE);
+                        
+                        //EntropyBuffer1.GetAsArray1D();
+                        //print1d(MergeNormBuffer.GetAsArray1D());
+                        BuildFreqKern(MergeNormBuffer.Extent.ToIntIndex(), MergeNormBuffer.View, MergeCountMap.View);
+                        //EntropyBuffer1.GetAsArray1D();
+                        //ent1 = EntropyBuffer1.GetAsArray1D()[0] / Math.Log(LOG_BASE);
+
+
+                        //EntropyBuffer1.GetAsArray1D();
+                        Console.WriteLine("Cond and second");
+                        print1d(CondNormBuffer.GetAsArray1D());
+                        print1d(SecondNormBuffer.GetAsArray1D());
+                        print1d(CountNonNaN.GetAsArray1D());
+                        Console.WriteLine(targetvar.GetLength(0));
+
+                        Console.WriteLine("Merge and second");
+                        print1d(MergeNormBuffer.GetAsArray1D());
+                        print1d(SecondNormBuffer.GetAsArray1D());
+                        print1d(CountNonNaN.GetAsArray1D());
+                        Console.WriteLine(targetvar.GetLength(0));
+                        IndexedCalcConditionalEntropyKern(CondNormBuffer.Extent.ToIntIndex(), JointBuffer1.View, CondCountMap.View, SecondNormBuffer.View, CondNormBuffer.View,EntropyBuffer1.View, targetvar.GetLength(0));
+                        IndexedCalcConditionalEntropyKern(MergeNormBuffer.Extent.ToIntIndex(), JointBuffer2.View, MergeCountMap.View, SecondNormBuffer.View, MergeNormBuffer.View,EntropyBuffer2.View, targetvar.GetLength(0));
+
+                        print2d(JointBuffer1.GetAsArray2D());
+                        print2d(JointBuffer2.GetAsArray2D());
+
+                        //Console.Write("Cond Entropy");
+                        ent1 = EntropyBuffer1.GetAsArray1D()[0] / Math.Log(LOG_BASE);
+                        print1d(targetvar);
+                        print1d(arr[j]);
+                        Console.Write("Cond Entropy");
+                        
+
+                        Console.WriteLine(ent1);
+                        ent2 = EntropyBuffer2.GetAsArray1D()[0] / Math.Log(LOG_BASE);
+                        print1d(targetvar);
+                        print1d(arr[i]);
+                        print1d(SecondNormBuffer.GetAsArray1D());
+                        
+                        print1d(FirstNormBuffer.GetAsArray1D());
+                        print1d(CondNormBuffer.GetAsArray1D());
+                        print1d(MergeNormBuffer.GetAsArray1D());
+                        Console.Write("Merge Entropy");
+                        Console.WriteLine(ent2);
+
+                        output.Add(new OutputGroup(columnnames[i], columnnames[j], ent1-ent2));
+                        //accelerate.DefaultStream.Synchronize();
+                    }
+                }
+            }
+
+            return output.ToArray();
+
+        }
         public double calculateConditionalMutualInformation(double[] firstVector, double[] secondVector, double[] conditionVector){
             
             //FirstCondEntropy (secondvector, conditionvector)
@@ -879,7 +1502,7 @@ namespace CSMI
             var FirstBuffer = accelerate.Allocate1D<double>(new Index1D(firstVector.GetLength(0)));
             var SecondBuffer = accelerate.Allocate1D<double>(new Index1D(secondVector.GetLength(0)));
             var CondBuffer = accelerate.Allocate1D<double>(new Index1D(conditionVector.GetLength(0)));
-            var testIndex = new LongIndex2D(10000, 1000000);
+            //var testIndex = new LongIndex2D(10000, 1000000);
             var FirstNormBuffer = accelerate.Allocate1D<double>(new Index1D(firstVector.GetLength(0)));
             var SecondNormBuffer = accelerate.Allocate1D<double>(new Index1D(secondVector.GetLength(0)));
             var CondNormBuffer = accelerate.Allocate1D<double>(new Index1D(conditionVector.GetLength(0)));
@@ -934,7 +1557,7 @@ namespace CSMI
             var mergeArraysKern= accelerate.LoadAutoGroupedStreamKernel<Index1D,
                 ArrayView1D<double, Stride1D.Dense>,
                 ArrayView1D<double, Stride1D.Dense>,
-                ArrayView1D<int, Stride1D.Dense>,
+                ArrayView2D<int, Stride2D.DenseX>,
                 ArrayView1D<double, Stride1D.Dense>,
                 ArrayView1D<int, Stride1D.Dense>,
                 int, int>(mergeArraysAdjKernel);
@@ -1005,6 +1628,7 @@ namespace CSMI
                 Index1D,
                 ArrayView1D<double, Stride1D.Dense>,
                 ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
                 ArrayView1D<double, Stride1D.Dense>
                 >(
                 refactorPart2Phase1Kernal);
@@ -1056,7 +1680,8 @@ namespace CSMI
 
 
 
-            var StateMap = accelerate.Allocate1D<int>(new Index1D((firstnumstates + 1)*(secondnumstates+ 1)));
+            var StateMap = accelerate.Allocate2DDenseX<int>(new Index2D(firstnumstates + 1, secondnumstates+ 1)); // accelerate.Allocate1D<int>(new Index1D((firstnumstates + 1)*(secondnumstates+ 1)));
+
             //outputVector = mergedBuffer.GetAsArray1D();
             
             setBuffToValueKern(StateCount.Extent.ToIntIndex(), StateCount.View, 1);
@@ -1078,6 +1703,8 @@ namespace CSMI
             //accelerate.DefaultStream.Synchronize();
             int premergenumstates = PreMergeMaxVal.GetAsArray1D()[0];
             var TempBuffer = accelerate.Allocate1D<double>(new Index1D(premergenumstates +1));
+            var TempBuffer2 = accelerate.Allocate1D<double>(new Index1D(premergenumstates +1));
+
             //var Temp2Buffer = accelerate.Allocate1D<double>(new Index1D(premergenumstates +1));
 
             var HolderBuffer = accelerate.Allocate1D<double>(new Index1D(1));
@@ -1121,11 +1748,11 @@ namespace CSMI
             //Console.WriteLine("Testtiong");
             //Console.ReadLine();
             watch.Start();
-            setBuffToValueDoubleKern(TempBuffer.Extent.ToIntIndex(), TempBuffer.View, 1.0);
+            setBuffToValueDoubleKern(TempBuffer2.Extent.ToIntIndex(), TempBuffer2.View, 1.0);
 
-            setBuffToValueDoubleKern(HolderBuffer.Extent.ToIntIndex(), HolderBuffer.View, 1.0);
+            setBuffToValueDoubleKern(HolderBuffer.Extent.ToIntIndex(), HolderBuffer.View, 0.0);
 
-            refactorPart2Phase1Kern(mergedBuffer.Extent.ToIntIndex(), mergedBuffer.View, TempBuffer.View, HolderBuffer.View);
+            refactorPart2Phase1Kern(mergedBuffer.Extent.ToIntIndex(), mergedBuffer.View, TempBuffer.View, TempBuffer2.View, HolderBuffer.View);
             //print1d(TempBuffer.GetAsArray1D());
             //print1d(HolderBuffer.GetAsArray1D());
             //Console.ReadLine();
@@ -1214,6 +1841,7 @@ namespace CSMI
 
             double ent1 = EntropyBuffer1.GetAsArray1D()[0] / Math.Log(LOG_BASE);
 
+
             double ent2 = EntropyBuffer2.GetAsArray1D()[0] / Math.Log(LOG_BASE);
 
             return ent1-ent2;
@@ -1272,7 +1900,7 @@ namespace CSMI
         static void refactorPart1Phase1Kernal(Index1D index,
             ArrayView1D<double, Stride1D.Dense> inputView,
             ArrayView1D<double, Stride1D.Dense> holderView){
-            if(!Double.IsNaN(inputView[index]) && inputView[index] > 1000){
+            if(!Double.IsNaN(inputView[index])){// && inputView[index] > 1000){
                 Atomic.Add(ref holderView[new Index1D((int)inputView[index])], 1.0);
 
             }
@@ -1288,10 +1916,11 @@ namespace CSMI
         static void refactorPart2Phase1Kernal(Index1D index,
             ArrayView1D<double, Stride1D.Dense> inputView,
             ArrayView1D<double, Stride1D.Dense> holderView,
+            ArrayView1D<double, Stride1D.Dense> holderView2,
             ArrayView1D<double, Stride1D.Dense> sharedmem){
             
                 
-            if(!Double.IsNaN(inputView[index])){
+            if(!Double.IsNaN(inputView[index]) && holderView[(int)inputView[index]] > 1 &&  (Atomic.Add(ref holderView2[(int)inputView[index]], 1.0) == 1)){
 
                 // //double x = Atomic.Add(ref holderView[(int)inputView[index]], Atomic.Add(ref sharedmem[new Index1D(0)], 1.0));
                 // if(holderView[(int)inputView[index]] > 1.0){
@@ -1299,6 +1928,7 @@ namespace CSMI
                 //     //Atomic.Add(ref holderView[(int)inputView[index]], sharedmem[new Index1D(0)]);
                 // }
                 // else{
+               
                 holderView[(int)inputView[index]] =  Atomic.Add(ref sharedmem[new Index1D(0)], 1.0);
                     
 
@@ -1306,6 +1936,13 @@ namespace CSMI
 
 
             }
+            // else if(!Double.IsNaN(inputView[index]) && holderView[(int)inputView[index]] <=1 ){
+            //     holderView[(int)inputView[index]] =  Double.NaN;
+            // }
+            // else{
+            //     holderView[(int)inputView[index]] = 6.9;
+            // }
+
             
         }   
         static void countnonNaN(Index1D index,
@@ -1326,7 +1963,7 @@ namespace CSMI
 
             }
             else if(index.X == 0 && Double.IsNaN(inputView[index] )){
-                inputView[new Index1D(0)] = 1.0;
+                inputView[new Index1D(0)] = 0.0;
             }
         }       
         // static void refactorPart2Kernal(Index1D index,
@@ -1389,27 +2026,27 @@ namespace CSMI
         static void mergeArraysAdjKernel(Index1D index,
             ArrayView1D<double, Stride1D.Dense> FirstNormView,
             ArrayView1D<double, Stride1D.Dense> SecondNormView,
-            ArrayView1D<int, Stride1D.Dense> StateMap,
+            ArrayView2D<int, Stride2D.DenseX> StateMap,
             ArrayView1D<double, Stride1D.Dense> OutputView,
             ArrayView1D<int, Stride1D.Dense> SCount,
             int firstnumstates,
             int length
             ){
-            int curindex;
+            Index2D curindex;
             //int statecount = 1;
             //Probably doesnt work
-            curindex = (int)FirstNormView[index] + ((int)SecondNormView[index] * firstnumstates);
-            // if(Atomic.Add(ref StateMap[new Index1D(curindex)], 1) == 0){
-            //     StateMap[new Index1D(curindex)] = Atomic.Add(ref SCount[new Index1D(0)], 1);
-            // }
-            // else{
-            //     Atomic.Add(ref StateMap[new Index1D(curindex)], -1);
-            // }
-            if(StateMap[new Index1D(curindex)] == 0){
-                StateMap[new Index1D(curindex)] = Atomic.Add(ref SCount[new Index1D(0)], 1);
-            }
-            OutputView[index] = (double)StateMap[curindex];
+            if(!Double.IsNaN(FirstNormView[index]) &&!Double.IsNaN(SecondNormView[index]) ){
+
             
+                curindex =  new Index2D((int)FirstNormView[index], (int)SecondNormView[index]);// + ((int)SecondNormView[index] * firstnumstates);
+                
+                if(StateMap[curindex] == 0){
+                    //Atomic.Add(ref SCount[new Index1D(0)], 1);
+                    StateMap[curindex] = Atomic.Add(ref SCount[new Index1D(0)], 1);
+                }
+                OutputView[index] = (double)StateMap[curindex];
+            }
+                
             
 
         }
@@ -1600,6 +2237,15 @@ namespace CSMI
             ///<param name="setvalue">setvalue</param>
             buff[index] = setvalue;
         }
+        static void setBuffToValue2DIntKernal(Index2D index, 
+            ArrayView2D<int, Stride2D.DenseX> buff, 
+            int setvalue)
+        {
+            ///<summary>Sets every element in buff to setvalue</summary>
+            ///<param name="buff">buff</param>
+            ///<param name="setvalue">setvalue</param>
+            buff[index] = setvalue;
+        }
         static void BuildFreqKernel(Index2D index, 
             ArrayView1D<double, Stride1D.Dense> input, 
             ArrayView1D<double, Stride1D.Dense> output)
@@ -1728,6 +2374,43 @@ namespace CSMI
         //     }
         //     return (jointEntropyList, ConditionalMIList);
         // }
+
+        void testmulti(int length, int numvariables, int cap){
+            //Console.WriteLine("In Test Mutli");
+            Stopwatch stop = new Stopwatch();
+
+            List<double[]> dataframe = new List<double[]>();
+            Random rand = new Random();
+
+            double[] temp;
+            double[] mainvar = new double[length];
+            string[] colnames = new string[numvariables];
+            for(int j =0; j < length; j++){
+                mainvar[j] = rand.NextDouble() * cap;
+            }
+            for(int i =0; i < numvariables; i++){
+                colnames[i] = i.ToString();
+                temp = new double[length];
+                for(int j =0; j < length; j++){
+                    temp[j] = rand.NextDouble() * cap;
+                }
+                dataframe.Add(temp);
+            }
+            Console.WriteLine("Here");
+            stop.Start();
+            OutputGroup[] best = findBestCondMutInf(mainvar, dataframe, colnames);
+            stop.Stop();
+            // Console.Write("[");
+            // for(int i = 0; i < best.GetLength(0); i++){   
+            //     Console.Write(best[i]);
+            //     Console.Write(", ");
+            // } 
+            // Console.WriteLine("]");
+
+            Console.Write("Total Time: ");
+            Console.WriteLine(stop.ElapsedMilliseconds);
+
+        }
         void test(int length){
             Stopwatch stop = new Stopwatch();
             Console.Write("LENGTH =");
@@ -1735,15 +2418,15 @@ namespace CSMI
             Random rand = new Random();
             double[] a = new double[length];
             for (int i = 0; i < length; i++) {
-              a[i] = rand.NextDouble() * 10000;
+              a[i] = rand.NextDouble() * 1000;
             }
             double[] b = new double[length];
             for (int i = 0; i < length; i++) {
-              b[i] = rand.NextDouble() * 10000;
+              b[i] = rand.NextDouble() * 100;
             }
             double[] c = new double[length];
             for (int i = 0; i < length; i++) {
-              c[i] = rand.NextDouble() * 10000;
+              c[i] = rand.NextDouble() * 100;
             }
             stop.Start();
             calculateMutualInformation(a,b);
@@ -1786,11 +2469,27 @@ namespace CSMI
         }
 		static void Main(string[] args)
 	    {
-            double[] a = new[] {4.2, 5.43, 3.221, 7.34235, 1.931, 1.2, 5.43, 8.0, 7.34235, 1.931};
-            double[] b = new [] {2.2, 3.43, 1.221, 9.34235, 7.931, 7.2, 4.43, 7.0, 7.34235, 34.931};
-            double[] d = new [] {2.2, 3.43, 2.221, 2.34235, 3.931, 3.2, 4.43, 7.0, 7.34235, 34.931};
+            double[] a = new []{4.2, 5.43, 3.221, 7.34235, 1.931, 1.2, 5.43, 8.0, 7.34235, 1.931};
+            double[] b =  new []{2.2, 3.43, 1.221, 1.34235, 7.931, 7.2, 4.43, 7.0, 7.34235, 34.931};
+            double[] d =  new []{2.2, 6.43, 2.221, 2.34235, 3.931, 3.2, 7.43, 7.0, 9.34235, 12.931};
+            string[] s = new [] {"test", "b", "c"};
             //double[] b = new[] {2.2, 3.43, 1.221, 9.34235, 7.931, 12.2, 4.43, 13.0, 14.34235, 34.931};
+            List<double[]> dataframe = new List<double[]>();
+            //dataframe.Add(a);
+            dataframe.Add(b);
+            dataframe.Add(d);
+
             double[] temp = new double [1000];
+            MI m = new MI();
+            //Console.WriteLine(m.calculateConditionalMutualInformation(a,b,d));
+            //Console.WriteLine(m.calculateConditionalMutualInformation(b,a,d));
+
+
+            OutputGroup[] best = m.findBestCondMutInf(a, dataframe, s);
+            for(int i = 0; i < best.GetLength(0); i++){
+                Console.WriteLine(best[i]);
+            }
+            Console.ReadLine();
             Random rd = new Random();
             List<double[]> newlist = new List<double[]>();
             // for(int i = 0; i < 100; i ++){
@@ -1803,10 +2502,9 @@ namespace CSMI
             // Console.WriteLine(newlist[0][0]);
             // Console.WriteLine(newlist[1][0]);
             
-            MI m = new MI();
-
-            Console.WriteLine("Refactoring");
-            m.refactorArray(a);
+            //m.testmulti(1000,100,10);
+            //Console.WriteLine("Refactoring");
+            //m.refactorArray(a);
             //Console.ReadLine();
       //       Console.WriteLine("In Multi");
 	    	// List<double> entropyarr = m.MulticalculateMutualInformation(newlist);
@@ -1853,10 +2551,23 @@ namespace CSMI
                 ArrayView1D<double, Stride1D.Dense>, int>(
                 CalcEntropyKernel);
 
-            for (int i = 1; i < 11; i++){
-              m.test((int)Math.Pow(10,i));
+            for (int i = 2; i < 7; i++){
+                for(int j = 1; j < 7; i++){
+                    for(int k = 1; k< 5; k++){
+                        Console.Write("Length: ");
+                        Console.Write(Math.Pow(10,i));
+                        Console.Write(" | Numvariables: ");
+                        Console.Write(Math.Pow(10,j));
+                        Console.Write("| Cap: ");
+                        Console.WriteLine(Math.Pow(10,k));
+                        m.testmulti((int)Math.Pow(10,i),(int)Math.Pow(10,j),(int)Math.Pow(10,k));
+                        Console.WriteLine();
+                    }
+                }
+              //m.test((int)Math.Pow(10,i));
             }
-            m.calculateConditionalMutualInformation(a,b, d);
+            Console.WriteLine("calc cond mutInf");
+            Console.WriteLine(m.calculateConditionalMutualInformation(a,b, d));
             // Console.ReadLine();
             // m.print1d(a);
             // m.print1d(m.refactorToMinimizeSize(a));
