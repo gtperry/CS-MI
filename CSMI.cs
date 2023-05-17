@@ -32,6 +32,12 @@ namespace CSMI
             this.context = Context.Create(builder => builder.AllAccelerators().EnableAlgorithms());
             //MI m = new MI();
             this.dev = this.context.GetPreferredDevice(preferCPU: false);
+            foreach (Device device in this.context)
+            {
+                Console.WriteLine($"* {device}");
+            }
+            Console.WriteLine($"Selected device: {this.dev}");
+            Console.WriteLine(new string('=', 10));
         }
         public double[] refactorArray(double[] arr){
             IDictionary<int, double> newarr = new Dictionary<int, double>();
