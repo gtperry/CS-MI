@@ -32,9 +32,16 @@ namespace CSMI
             this.context = Context.Create(builder => builder.AllAccelerators().EnableAlgorithms());
             //MI m = new MI();
             this.dev = this.context.GetPreferredDevice(preferCPU: false);
-            foreach (Device device in this.context)
-            {
-                Console.WriteLine($"* {device}");
+            // If we are not using the CPU, then prefer Cuda over OpenCL for the GPU
+            if (this.dev.AcceleratorType != AcceleratorType.CPU){
+                foreach (Device device in this.context)
+                {
+                    if (device.AcceleratorType == AcceleratorType.Cuda)
+                    {
+                        this.dev = device;
+                        break;
+                    }
+                }
             }
             Console.WriteLine($"Selected device: {this.dev}");
             Console.WriteLine(new string('=', 10));
