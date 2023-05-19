@@ -17,6 +17,18 @@ using CsvHelper.Configuration;
 
 namespace CSMI
 {
+    public class Utils
+    {
+        public static void MeasureExecutionTime(string functionName, Action function)
+        {
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Restart();
+            function.Invoke();
+            stopwatch.Stop();
+            Console.WriteLine($"Elapsed time for '{functionName}': {stopwatch.ElapsedMilliseconds} ms");
+        }
+    }
+
     public class MI : IDisposable
     {
         const double LOG_BASE = 2.0;
@@ -46,14 +58,10 @@ namespace CSMI
             Console.WriteLine(new string('=', 10));
         }
 
+        // Remember to instantiate MI class with a `using` statement. Called automatically
         public void Dispose()
         {
             this.context.Dispose();
-        }
-
-        ~MI()
-        {
-            this.Dispose();
         }
 
         public double[] refactorArray(double[] arr)
@@ -391,7 +399,9 @@ namespace CSMI
             //Console.WriteLine(firstnumstates);
             //Console.WriteLine(secondnumstates);
 
-            using var JointBuffer = accelerate.Allocate2DDenseX<double>(new Index2D(firstnumstates + 1, secondnumstates + 1));
+            using var JointBuffer = accelerate.Allocate2DDenseX<double>(
+                new Index2D(firstnumstates + 1, secondnumstates + 1)
+            );
 
             //setBuffToValue2DKern(JointBuffer.Extent.ToIntIndex(), JointBuffer.View, 0.0);
             // setBuffToValueDoubleKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, 0.0);
@@ -2066,8 +2076,7 @@ namespace CSMI
         void test(int length)
         {
             Stopwatch stop = new Stopwatch();
-            Console.Write("LENGTH =");
-            Console.WriteLine(length);
+            Console.WriteLine($"LENGTH = {length:n0}");
             Random rand = new Random();
             double[] a = new double[length];
             for (int i = 0; i < length; i++)
@@ -2085,40 +2094,14 @@ namespace CSMI
                 c[i] = rand.NextDouble() * 10000;
             }
 
-            stop.Start();
-            calculateMutualInformation(a, b);
-            stop.Stop();
-            Console.Write("Elapsed time for Mutual Information: ");
-            Console.WriteLine(stop.ElapsedMilliseconds);
-            stop.Reset();
-
-            stop.Start();
-            calculateEntropy(a);
-            stop.Stop();
-            Console.Write("Elapsed time for Calculate Entropy: ");
-            Console.WriteLine(stop.ElapsedMilliseconds);
-            stop.Reset();
-
-            stop.Start();
-            calculateConditionalEntropy(a, b);
-            stop.Stop();
-            Console.Write("Elapsed time f or Calculate Conditional Entropy: ");
-            Console.WriteLine(stop.ElapsedMilliseconds);
-            stop.Reset();
-
-            stop.Start();
-            calculateJointEntropy(a, b);
-            stop.Stop();
-            Console.Write("Elapsed time for Calculate Joint Entropy: ");
-            Console.WriteLine(stop.ElapsedMilliseconds);
-            stop.Reset();
-
-            stop.Start();
-            calculateConditionalMutualInformation(a, b, c);
-            stop.Stop();
-            Console.Write("Elapsed time for Conditional Mutual Information: ");
-            Console.WriteLine(stop.ElapsedMilliseconds);
-            stop.Reset();
+            Utils.MeasureExecutionTime("Mutual Information", () => calculateMutualInformation(a, b));
+            Utils.MeasureExecutionTime("Calculate Entropy", () => calculateEntropy(a));
+            Utils.MeasureExecutionTime("Calculate Conditional Entropy", () => calculateConditionalEntropy(a, b));
+            Utils.MeasureExecutionTime("Calculate Joint Entropy", () => calculateJointEntropy(a, b));
+            Utils.MeasureExecutionTime(
+                "Conditional Mutual Information",
+                () => calculateConditionalMutualInformation(a, b, c)
+            );
 
             Console.WriteLine();
             Console.WriteLine("----------------------------");
@@ -2197,8 +2180,16 @@ namespace CSMI
 
             for (int i = 1; i < 11; i++)
             {
-                Console.WriteLine("Iteration: " + i);
-                m.test((int)Math.Pow(10, i));
+                try
+                {
+                    Console.WriteLine("Iteration: " + i);
+                    m.test((int)Math.Pow(10, i));
+                }
+                catch (AcceleratorException e)
+                {
+                    Console.WriteLine(e);
+                    break;
+                }
             }
 
             // m.calculateConditionalMutualInformation(a, b, d);
