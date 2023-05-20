@@ -19,13 +19,44 @@ namespace CSMI
 {
     public class Utils
     {
-        public static void MeasureExecutionTime(string functionName, Action function)
+        /// <summary>
+        /// Measures the execution time of a function and prints it to the console.
+        /// </summary>
+        /// <param name="functionName">Name to be printed in the console</param>
+        /// <param name="function">Function to be executed and/or measured</param>
+        /// <param name="measure">Determines whether the function should be measured or not</param>
+        public static T MeasureExecutionTime<T>(
+            string functionName,
+            Func<T> function,
+            bool measure = true,
+            bool printOutput = false
+        )
         {
-            Stopwatch stopwatch = new Stopwatch();
-            stopwatch.Restart();
-            function.Invoke();
-            stopwatch.Stop();
-            Console.WriteLine($"Elapsed time for '{functionName}': {stopwatch.ElapsedMilliseconds} ms");
+            T functionOutput;
+
+            if (!measure)
+            {
+                functionOutput = function();
+            }
+            else
+            {
+                Stopwatch stopwatch = new Stopwatch();
+                stopwatch.Restart();
+                functionOutput = function();
+                stopwatch.Stop();
+                Console.Write($"Elapsed time for '{functionName}': {stopwatch.ElapsedMilliseconds} ms");
+            }
+
+            if (printOutput)
+            {
+                Console.WriteLine($" -> {functionOutput}");
+            }
+            else
+            {
+                Console.WriteLine();
+            }
+
+            return functionOutput;
         }
     }
 
@@ -40,9 +71,8 @@ namespace CSMI
         public MI()
         {
             this.context = Context.Create(builder => builder.AllAccelerators().EnableAlgorithms());
-            //MI m = new MI();
             this.dev = this.context.GetPreferredDevice(preferCPU: false);
-            // If we are not using the CPU, then prefer Cuda over OpenCL for the GPU
+            // If we are not using the CPU, then prefer Cuda over OpenCL for the GPU if both are present
             if (this.dev.AcceleratorType != AcceleratorType.CPU)
             {
                 foreach (Device device in this.context)
@@ -58,7 +88,7 @@ namespace CSMI
             Console.WriteLine(new string('=', 10));
         }
 
-        // Remember to instantiate MI class with a `using` statement. Called automatically
+        // Remember to instantiate MI class with a `using` statement. Called automatically.
         public void Dispose()
         {
             this.context.Dispose();
@@ -535,8 +565,8 @@ namespace CSMI
             // print1d(SecondNormBuffer.GetAsArray1D());
             int firstnumstates = FirstMaxVal.GetAsArray1D()[0];
             int secondnumstates = SecondMaxVal.GetAsArray1D()[0];
-            Console.WriteLine(firstnumstates);
-            Console.WriteLine(secondnumstates);
+            // Console.WriteLine(firstnumstates);
+            // Console.WriteLine(secondnumstates);
 
             using var JointBuffer = accelerate.Allocate2DDenseX<double>(
                 new Index2D(firstnumstates + 1, secondnumstates + 1)
@@ -550,7 +580,7 @@ namespace CSMI
             // setBuffToValueDoubleKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, 0.0);
             //Console.WriteLine(EntropyBuffer.GetAsArray1D()[0]);
             answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(LOG_BASE);
-            Console.WriteLine("First and second norm:");
+            // Console.WriteLine("First and second norm:");
             //print1d(SecondMinVal.GetAsArray1D());
             //print1d(SecondNormBuffer.GetAsArray1D());
             //Console.ReadLine();
@@ -979,10 +1009,9 @@ namespace CSMI
                 ArrayView1D<double, Stride1D.Dense>
             >(BuildFreqAdjustedKernel);
             List<double> MIanswers = new List<double>();
-            Stopwatch watch = new Stopwatch();
+
             for (int i = 0; i < arr.Count; i++)
             {
-                watch.Start();
                 for (int j = 0; j < arr.Count; j++)
                 {
                     if (i != j)
@@ -1070,9 +1099,6 @@ namespace CSMI
                         MIanswers.Add(answer);
                     }
                 }
-                watch.Stop();
-                Console.WriteLine(watch.ElapsedMilliseconds);
-                watch.Reset();
             }
             JointBuffer.Dispose();
             FirstCountMap.Dispose();
@@ -1396,7 +1422,7 @@ namespace CSMI
 
             watch.Stop();
 
-            Console.WriteLine("Refactor Arrs Part2:");
+            // Console.WriteLine("Refactor Arrs Part2:");
 
             //Console.WriteLine(watch.ElapsedMilliseconds);
             watch.Reset();
@@ -1421,17 +1447,17 @@ namespace CSMI
             setBuffToValueDoubleKern(CountNonNaN.Extent.ToIntIndex(), CountNonNaN.View, 1.0);
             countnonNaNKern(mergedBuffer.Extent.ToIntIndex(), mergedBuffer.View, CountNonNaN.View);
 
-            Console.WriteLine("NumStates");
-            Console.WriteLine(secondnumstates);
+            // Console.WriteLine("NumStates");
+            // Console.WriteLine(secondnumstates);
 
-            Console.WriteLine(condnumstates);
+            // Console.WriteLine(condnumstates);
 
-            Console.WriteLine(mergenumstates);
-            Console.WriteLine(MergeMinVal.GetAsArray1D()[0]);
-            Console.WriteLine("PreMergeNumStates");
-            Console.WriteLine(premergenumstates);
+            // Console.WriteLine(mergenumstates);
+            // Console.WriteLine(MergeMinVal.GetAsArray1D()[0]);
+            // Console.WriteLine("PreMergeNumStates");
+            // Console.WriteLine(premergenumstates);
 
-            Console.WriteLine(CountNonNaN.GetAsArray1D()[0]);
+            // Console.WriteLine(CountNonNaN.GetAsArray1D()[0]);
 
             //print1d(mergedBuffer.GetAsArray1D());
             //Console.ReadLine();
@@ -1916,27 +1942,27 @@ namespace CSMI
             MinVal[index] = (int)Math.Floor(aView[new Index1D(0)]);
         }
 
+        ///<summary>Sets every element in buff to setvalue</summary>
+        ///<param name="buff">buff</param>
+        ///<param name="setvalue">setvalue</param>
         static void setBuffToValueKernal(Index1D index, ArrayView1D<int, Stride1D.Dense> buff, int setvalue)
         {
-            ///<summary>Sets every element in buff to setvalue</summary>
-            ///<param name="buff">buff</param>
-            ///<param name="setvalue">setvalue</param>
             buff[index] = setvalue;
         }
 
+        ///<summary>Sets every element in buff to setvalue</summary>
+        ///<param name="buff">buff</param>
+        ///<param name="setvalue">setvalue</param>
         static void setBuffToValueDoubleKernal(Index1D index, ArrayView1D<double, Stride1D.Dense> buff, double setvalue)
         {
-            ///<summary>Sets every element in buff to setvalue</summary>
-            ///<param name="buff">buff</param>
-            ///<param name="setvalue">setvalue</param>
             buff[index] = setvalue;
         }
 
+        ///<summary>Sets every element in buff to setvalue</summary>
+        ///<param name="buff">buff</param>
+        ///<param name="setvalue">setvalue</param>
         static void setBuffToValue2DKernal(Index2D index, ArrayView2D<double, Stride2D.DenseX> buff, double setvalue)
         {
-            ///<summary>Sets every element in buff to setvalue</summary>
-            ///<param name="buff">buff</param>
-            ///<param name="setvalue">setvalue</param>
             buff[index] = setvalue;
         }
 
@@ -2073,26 +2099,54 @@ namespace CSMI
         //     }
         //     return (jointEntropyList, ConditionalMIList);
         // }
-        void test(int length)
+
+        double[] GenerateRandomNumbers(int length)
         {
-            Stopwatch stop = new Stopwatch();
-            Console.WriteLine($"LENGTH = {length:n0}");
             Random rand = new Random();
-            double[] a = new double[length];
+            double[] numbers = new double[length];
+
             for (int i = 0; i < length; i++)
             {
-                a[i] = rand.NextDouble() * 10000;
+                numbers[i] = rand.NextDouble() * 10000;
             }
-            double[] b = new double[length];
-            for (int i = 0; i < length; i++)
-            {
-                b[i] = rand.NextDouble() * 10000;
-            }
-            double[] c = new double[length];
-            for (int i = 0; i < length; i++)
-            {
-                c[i] = rand.NextDouble() * 10000;
-            }
+
+            return numbers;
+        }
+
+        /// <summary>
+        /// For reference, the values returned for the functions here  (at double precision) in Java are the following:
+        /// <para>calculateEntropy: 2.4464393446710155</para>
+        /// <para>calculateConditionalEntropy: 0.6</para>
+        /// <para>calculateJointEntropy: 3.121928094887362</para>
+        /// <para>calculateMutualInformation1.8464393446710157</para>
+        /// <para>calculateConditionalMutualInformation: 0.7509775004326935</para>
+        /// </summary>
+        void testReproducible()
+        {
+            // Reproducible data
+            double[] a = new[] { 4.2, 5.43, 3.221, 7.34235, 1.931, 1.2, 5.43, 8.0, 7.34235, 1.931 };
+            double[] b = new[] { 2.2, 3.43, 1.221, 9.34235, 7.931, 7.2, 4.43, 7.0, 7.34235, 34.931 };
+            double[] c = new[] { 2.2, 3.43, 2.221, 2.34235, 3.931, 3.2, 4.43, 7.0, 7.34235, 34.931 };
+            Console.WriteLine("Testing with reproducible data");
+            // csharpier-ignore-start
+            Utils.MeasureExecutionTime("Calculate Entropy", () => calculateEntropy(a), printOutput: true);
+            Utils.MeasureExecutionTime("Calculate Conditional Entropy", () => calculateConditionalEntropy(a, b), printOutput: true);
+            Utils.MeasureExecutionTime("Calculate Joint Entropy", () => calculateJointEntropy(a, b), printOutput: true);
+            Utils.MeasureExecutionTime("Mutual Information", () => calculateMutualInformation(a, b), printOutput: true);
+            Utils.MeasureExecutionTime("Conditional Mutual Information", () => calculateConditionalMutualInformation(a, b, c), printOutput: true);
+            // csharpier-ignore-end
+
+            Console.WriteLine();
+            Console.WriteLine("----------------------------");
+            Console.WriteLine();
+        }
+
+        void testRandom(int length)
+        {
+            Console.WriteLine($"LENGTH = {length:n0}");
+            double[] a = GenerateRandomNumbers(length);
+            double[] b = GenerateRandomNumbers(length);
+            double[] c = GenerateRandomNumbers(length);
 
             Utils.MeasureExecutionTime("Mutual Information", () => calculateMutualInformation(a, b));
             Utils.MeasureExecutionTime("Calculate Entropy", () => calculateEntropy(a));
@@ -2110,91 +2164,23 @@ namespace CSMI
 
         static void Main(string[] args)
         {
-            double[] a = new[] { 4.2, 5.43, 3.221, 7.34235, 1.931, 1.2, 5.43, 8.0, 7.34235, 1.931 };
-            // double[] b = new[] { 2.2, 3.43, 1.221, 9.34235, 7.931, 7.2, 4.43, 7.0, 7.34235, 34.931 };
-            // double[] d = new[] { 2.2, 3.43, 2.221, 2.34235, 3.931, 3.2, 4.43, 7.0, 7.34235, 34.931 };
-            // //double[] b = new[] {2.2, 3.43, 1.221, 9.34235, 7.931, 12.2, 4.43, 13.0, 14.34235, 34.931};
-            // double[] temp = new double[1000];
-            // Random rd = new Random();
-            // List<double[]> newlist = new List<double[]>();
-
             using MI m = new MI();
 
-            Console.WriteLine("Refactoring");
-            m.refactorArray(a);
+            m.testReproducible();
 
-            // double[] c = new double[10];
-            // Context context = Context.Create(builder => builder.AllAccelerators().EnableAlgorithms());
-
-            // Device dev = context.GetPreferredDevice(preferCPU: false);
-            // if (dev.AcceleratorType != AcceleratorType.CPU)
+            // for (int i = 1; i < 11; i++)
             // {
-            //     foreach (Device device in context)
+            //     try
             //     {
-            //         if (device.AcceleratorType == AcceleratorType.Cuda)
-            //         {
-            //             dev = device;
-            //             break;
-            //         }
+            //         Console.WriteLine("Iteration: " + i);
+            //         m.testRandom((int)Math.Pow(10, i));
+            //     }
+            //     catch (AcceleratorException e)
+            //     {
+            //         Console.WriteLine(e);
+            //         break;
             //     }
             // }
-            // using Accelerator accelerate = dev.CreateAccelerator(context);
-            // Console.WriteLine($"Accelerator: {accelerate}");
-            // using var MVBuffer = accelerate.Allocate1D<double>(new Index1D(10));
-            // using var FreqBuffer = accelerate.Allocate1D<double>(new Index1D(10));
-            // MVBuffer.CopyFromCPU(a);
-            // using var MaxVal = accelerate.Allocate1D<int>(new Index1D(1));
-            // using var MinVal = accelerate.Allocate1D<int>(new Index1D(1));
-            // using var EntropyBuffer = accelerate.Allocate1D<double>(new Index1D(10));
-
-            // var GetMaxValKern = accelerate.LoadAutoGroupedStreamKernel<
-            //     Index1D,
-            //     ArrayView1D<double, Stride1D.Dense>,
-            //     ArrayView1D<int, Stride1D.Dense>,
-            //     ArrayView1D<int, Stride1D.Dense>
-            // >(GetMaxMinValKernal);
-            // var InitMaxMinKern = accelerate.LoadAutoGroupedStreamKernel<
-            //     Index1D,
-            //     ArrayView1D<double, Stride1D.Dense>,
-            //     ArrayView1D<int, Stride1D.Dense>,
-            //     ArrayView1D<int, Stride1D.Dense>
-            // >(InitMaxMinKernel);
-            // var setBuffToValueKern = accelerate.LoadAutoGroupedStreamKernel<
-            //     Index1D,
-            //     ArrayView1D<int, Stride1D.Dense>,
-            //     int
-            // >(setBuffToValueKernal);
-
-            // var BuildFreqKern = accelerate.LoadAutoGroupedStreamKernel<
-            //     Index2D,
-            //     ArrayView1D<double, Stride1D.Dense>,
-            //     ArrayView1D<double, Stride1D.Dense>
-            // >(BuildFreqKernel);
-
-            // var CalcEntropyKern = accelerate.LoadAutoGroupedStreamKernel<
-            //     Index1D,
-            //     ArrayView1D<double, Stride1D.Dense>,
-            //     ArrayView1D<double, Stride1D.Dense>,
-            //     int
-            // >(CalcEntropyKernel);
-
-            for (int i = 1; i < 11; i++)
-            {
-                try
-                {
-                    Console.WriteLine("Iteration: " + i);
-                    m.test((int)Math.Pow(10, i));
-                }
-                catch (AcceleratorException e)
-                {
-                    Console.WriteLine(e);
-                    break;
-                }
-            }
-
-            // m.calculateConditionalMutualInformation(a, b, d);
-
-            Console.WriteLine("Hello World");
         }
     }
 }
