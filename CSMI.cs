@@ -214,7 +214,7 @@ namespace CSMI
             InitMaxMinKern(MaxVal.Extent.ToIntIndex(), MVBuffer.View, MaxVal.View, MinVal.View);
             GetMaxValKern(MVBuffer.Extent.ToIntIndex(), MVBuffer.View, MaxVal.View, MinVal.View);
             normalizeArrayKern(MVBuffer.Extent.ToIntIndex(), MVBuffer.View, MVNormBuffer.View, MinVal);
-            using var FreqBuffer = accelerate.Allocate1D<double>(
+            var FreqBuffer = accelerate.Allocate1D<double>(
                 new Index1D(MaxVal.GetAsArray1D()[0] - MinVal.GetAsArray1D()[0] + 1)
             );
             //setBuffToValueKern(FreqBuffer.Extent.ToIntIndex(), FreqBuffer.View, 0.0);
@@ -228,10 +228,10 @@ namespace CSMI
             // }
             // else{
             //BuildFreqKern(new Index2D(MVBuffer.Extent.ToIntIndex().X,MVBuffer.Extent.ToIntIndex().X), MVBuffer.View, FreqBuffer.View);
-            BuildFreqKern(MVBuffer.Extent.ToIntIndex(), MVBuffer.View, FreqBuffer.View);
+            // BuildFreqKern(MVBuffer.Extent.ToIntIndex(), MVBuffer.View, FreqBuffer.View);
             //}
 
-            //print1d(FreqBuffer.GetAsArray1D());
+            BuildFreqKern(MVNormBuffer.Extent.ToIntIndex(), MVNormBuffer.View, FreqBuffer.View);
 
             CalcEntropyKern(
                 FreqBuffer.Extent.ToIntIndex(),
@@ -240,6 +240,7 @@ namespace CSMI
                 dataVector.GetLength(0)
             );
             double answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(LOG_BASE);
+            FreqBuffer.Dispose();
             accelerate.Dispose();
             return answer;
         }
@@ -2114,27 +2115,45 @@ namespace CSMI
         }
 
         /// <summary>
-        /// For reference, the values returned for the functions here  (at double precision) in Java are the following:
-        /// <para>calculateEntropy: 2.4464393446710155</para>
-        /// <para>calculateConditionalEntropy: 0.6</para>
-        /// <para>calculateJointEntropy: 3.121928094887362</para>
-        /// <para>calculateMutualInformation1.8464393446710157</para>
-        /// <para>calculateConditionalMutualInformation: 0.7509775004326935</para>
+        /// This function runs tests against the Java implementation of this library to ensure that the results are reproducible.
         /// </summary>
         void testReproducible()
         {
-            // Reproducible data
+            // Fixed data for reproducible results
             double[] a = new[] { 4.2, 5.43, 3.221, 7.34235, 1.931, 1.2, 5.43, 8.0, 7.34235, 1.931 };
             double[] b = new[] { 2.2, 3.43, 1.221, 9.34235, 7.931, 7.2, 4.43, 7.0, 7.34235, 34.931 };
             double[] c = new[] { 2.2, 3.43, 2.221, 2.34235, 3.931, 3.2, 4.43, 7.0, 7.34235, 34.931 };
-            Console.WriteLine("Testing with reproducible data");
+
+            // These are the results obtained from the Java implementation of this library for each function.
+            var javaResultsMap = new Dictionary<int, (string name, double javaResult)>()
+            {
+                {0, ("Entropy", 2.4464393446710155)},
+                {1, ("ConditionalEntropy", 0.6)},
+                {2, ("JointEntropy", 3.121928094887362)},
+                {3, ("MutualInformation", 1.8464393446710157)},
+                {4, ("ConditionalMutualInformation", 0.7509775004326935)},
+            };
+
             // csharpier-ignore-start
-            Utils.MeasureExecutionTime("Calculate Entropy", () => calculateEntropy(a), printOutput: true);
-            Utils.MeasureExecutionTime("Calculate Conditional Entropy", () => calculateConditionalEntropy(a, b), printOutput: true);
-            Utils.MeasureExecutionTime("Calculate Joint Entropy", () => calculateJointEntropy(a, b), printOutput: true);
-            Utils.MeasureExecutionTime("Mutual Information", () => calculateMutualInformation(a, b), printOutput: true);
-            Utils.MeasureExecutionTime("Conditional Mutual Information", () => calculateConditionalMutualInformation(a, b, c), printOutput: true);
+            var resultsList = new double[]{
+                Utils.MeasureExecutionTime(javaResultsMap[0].name, () => calculateEntropy(a), printOutput: true),
+                Utils.MeasureExecutionTime(javaResultsMap[1].name, () => calculateConditionalEntropy(a, b), printOutput: true),
+                Utils.MeasureExecutionTime(javaResultsMap[2].name, () => calculateJointEntropy(a, b), printOutput: true),
+                Utils.MeasureExecutionTime(javaResultsMap[3].name, () => calculateMutualInformation(a, b), printOutput: true),
+                Utils.MeasureExecutionTime(javaResultsMap[4].name, () => calculateConditionalMutualInformation(a, b, c), printOutput: true),
+            };
             // csharpier-ignore-end
+
+            // See if the functions for the C# vs Java implementation are the same
+            Console.WriteLine("\nJava vs C# return values test results:");
+            var decimalPlaces = 12;
+            for (int i = 0; i < resultsList.Length; i++)
+            {
+                var csharpResult = Math.Round(resultsList[i], decimalPlaces);
+                var javaResult = Math.Round(javaResultsMap[i].javaResult, decimalPlaces);
+                var testOutcome = (csharpResult == javaResult) ? "PASS" : "FAIL";
+                Console.WriteLine($"{i}) {javaResultsMap[i].name}: {testOutcome}");
+            }
 
             Console.WriteLine();
             Console.WriteLine("----------------------------");
@@ -2148,10 +2167,10 @@ namespace CSMI
             double[] b = GenerateRandomNumbers(length);
             double[] c = GenerateRandomNumbers(length);
 
-            Utils.MeasureExecutionTime("Mutual Information", () => calculateMutualInformation(a, b));
             Utils.MeasureExecutionTime("Calculate Entropy", () => calculateEntropy(a));
             Utils.MeasureExecutionTime("Calculate Conditional Entropy", () => calculateConditionalEntropy(a, b));
             Utils.MeasureExecutionTime("Calculate Joint Entropy", () => calculateJointEntropy(a, b));
+            Utils.MeasureExecutionTime("Mutual Information", () => calculateMutualInformation(a, b));
             Utils.MeasureExecutionTime(
                 "Conditional Mutual Information",
                 () => calculateConditionalMutualInformation(a, b, c)
@@ -2164,23 +2183,44 @@ namespace CSMI
 
         static void Main(string[] args)
         {
+            Console.WriteLine("Usage: CSMI.exe [OPTION]");
+            Console.WriteLine("Options:");
+            Console.WriteLine("0 (or none specified) -> Test Reproducible");
+            Console.WriteLine("1 -> Test Random");
+            Console.WriteLine($"Args: {string.Join(" ", args)}");
+            int option_selected = 0;
+            if (args.Length != 0)
+            {
+                try
+                {
+                    option_selected = int.Parse(args[0]);
+                }
+                catch { }
+            }
+
             using MI m = new MI();
 
-            m.testReproducible();
-
-            // for (int i = 1; i < 11; i++)
-            // {
-            //     try
-            //     {
-            //         Console.WriteLine("Iteration: " + i);
-            //         m.testRandom((int)Math.Pow(10, i));
-            //     }
-            //     catch (AcceleratorException e)
-            //     {
-            //         Console.WriteLine(e);
-            //         break;
-            //     }
-            // }
+            if (option_selected == 1)
+            {
+                for (int i = 1; i < 11; i++)
+                {
+                    try
+                    {
+                        Console.WriteLine("Iteration: " + i);
+                        m.testRandom((int)Math.Pow(10, i));
+                    }
+                    catch (AcceleratorException e)
+                    {
+                        Console.WriteLine(e);
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                Console.WriteLine("Testing with reproducible data");
+                m.testReproducible();
+            }
         }
     }
 }
