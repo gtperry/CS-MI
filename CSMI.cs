@@ -544,7 +544,7 @@ namespace CSMI
                 SecondNormBuffer.View,
                 JointBuffer.View
             );
-            //print2d(JointBuffer.GetAsArray2D());
+            // print2d(JointBuffer.GetAsArray2D());
             //Console.WriteLine(EntropyBuffer.GetAsArray1D()[0]);
             answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(LOG_BASE);
             BuildFreqKern(SecondNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, SecondCountMap.View);
@@ -1995,40 +1995,32 @@ namespace CSMI
             // }
         }
 
-        void print1d(int[] array)
+        void print1d<T>(T[] array)
         {
-            Console.Write("[");
-            for (int j = 0; j < array.GetLength(0); j++)
-            {
-                Console.Write("{0}, ", array[j]);
-            }
-            Console.WriteLine("]");
+            Console.WriteLine($"[{string.Join(", ", array)}]");
         }
 
-        void print1d(double[] array)
+        void print2d<T>(T[,] array)
         {
-            Console.Write("[");
-            for (int j = 0; j < array.GetLength(0); j++)
-            {
-                Console.Write("{0}, ", array[j]);
-            }
-            Console.WriteLine("]");
-        }
-
-        void print2d(double[,] array)
-        {
-            Console.WriteLine(array);
-
+            Console.WriteLine("[");
             for (int i = 0; i < array.GetLength(0); i++)
             {
                 Console.Write("[");
                 for (int j = 0; j < array.GetLength(1); j++)
                 {
-                    Console.Write("{0}, ", array[i, j]);
+                    Console.Write("{0}", array[i, j]);
+                    if (j < array.GetLength(1) - 1)
+                    {
+                        Console.Write(", ");
+                    }
                 }
                 Console.Write("]");
-                Console.WriteLine(", ");
+                if (i < array.GetLength(0) - 1)
+                {
+                    Console.WriteLine(",");
+                }
             }
+            Console.WriteLine();
             Console.WriteLine("]");
         }
 
@@ -2079,13 +2071,12 @@ namespace CSMI
             // These are the results obtained from the Java implementation of this library for each function.
             var javaResultsMap = new Dictionary<int, (string name, double javaResult)>()
             {
-                {0, ("Entropy", 2.4464393446710155)},
-                {1, ("ConditionalEntropy", 0.6)},
-                {2, ("JointEntropy", 3.121928094887362)},
-                {3, ("MutualInformation", 1.8464393446710157)},
-                {4, ("ConditionalMutualInformation", 0.7509775004326935)},
+                { 0, ("Entropy", 2.4464393446710155) },
+                { 1, ("ConditionalEntropy", 0.6) },
+                { 2, ("JointEntropy", 3.121928094887362) },
+                { 3, ("MutualInformation", 1.8464393446710157) },
+                { 4, ("ConditionalMutualInformation", 0.7509775004326935) },
             };
-
             // csharpier-ignore-start
             var resultsList = new double[]{
                 Utils.MeasureExecutionTime(javaResultsMap[0].name, () => calculateEntropy(a), printOutput: true),
@@ -2118,15 +2109,13 @@ namespace CSMI
             double[] a = GenerateRandomNumbers(length);
             double[] b = GenerateRandomNumbers(length);
             double[] c = GenerateRandomNumbers(length);
-
+            // csharpier-ignore-start
             Utils.MeasureExecutionTime("Calculate Entropy", () => calculateEntropy(a));
             Utils.MeasureExecutionTime("Calculate Conditional Entropy", () => calculateConditionalEntropy(a, b));
             Utils.MeasureExecutionTime("Calculate Joint Entropy", () => calculateJointEntropy(a, b));
             Utils.MeasureExecutionTime("Mutual Information", () => calculateMutualInformation(a, b));
-            Utils.MeasureExecutionTime(
-                "Conditional Mutual Information",
-                () => calculateConditionalMutualInformation(a, b, c)
-            );
+            Utils.MeasureExecutionTime("Conditional Mutual Information", () => calculateConditionalMutualInformation(a, b, c));
+            // csharpier-ignore-end
 
             Console.WriteLine();
             Console.WriteLine("----------------------------");
@@ -2135,6 +2124,7 @@ namespace CSMI
 
         static void Main(string[] args)
         {
+            #region Command line usage
             Console.WriteLine("Usage: CSMI.exe [OPTION]");
             Console.WriteLine("Options:");
             Console.WriteLine("0 (or none specified) -> Test Reproducible");
@@ -2149,6 +2139,7 @@ namespace CSMI
                 }
                 catch { }
             }
+            #endregion
 
             using MI m = new MI();
 
