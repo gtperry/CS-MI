@@ -14,6 +14,7 @@ using ILGPU.Runtime.OpenCL;
 using System.Globalization;
 using CsvHelper;
 using CsvHelper.Configuration;
+using System.Collections.Concurrent;
 
 namespace CSMI
 {
@@ -119,7 +120,7 @@ namespace CSMI
             return refactoredarr;
         }
 
-        public static int szudzikPair(int x, int y)
+        public static long szudzikPair(long x, long y)
         {
             return (x >= y ? (x * x) + x + y : (y * y) + x);
         }
@@ -198,6 +199,7 @@ namespace CSMI
                 dataVector.GetLength(0)
             );
             double answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(LOG_BASE);
+            // print1d(MVNormBuffer.GetAsArray1D());
             accelerate.Dispose();
             return answer;
         }
@@ -371,23 +373,17 @@ namespace CSMI
             //Console.WriteLine(FirstMaxVal.GetAsArray1D()[0]);
             InitMaxMinKern(SecondMaxVal.Extent.ToIntIndex(), SecondBuffer.View, SecondMaxVal.View, SecondMinVal.View);
             GetMaxValKern(SecondBuffer.Extent.ToIntIndex(), SecondBuffer.View, SecondMaxVal.View, SecondMinVal.View);
-
+            // csharpier-ignore-start
             normalizeArrayKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, FirstNormBuffer.View, FirstMinVal);
-            normalizeArrayKern(
-                SecondBuffer.Extent.ToIntIndex(),
-                SecondBuffer.View,
-                SecondNormBuffer.View,
-                SecondMinVal
-            );
+            normalizeArrayKern(SecondBuffer.Extent.ToIntIndex(), SecondBuffer.View, SecondNormBuffer.View, SecondMinVal);
+            // csharpier-ignore-end
             // Console.WriteLine("Norms");
             // print1d(FirstNormBuffer.GetAsArray1D());
             // print1d(SecondNormBuffer.GetAsArray1D());
             int firstMaxVal = FirstMaxVal.GetAsArray1D()[0];
             int secondMaxVal = SecondMaxVal.GetAsArray1D()[0];
 
-            using var JointBuffer = accelerate.Allocate2DDenseX<double>(
-                new Index2D(firstMaxVal + 1, secondMaxVal + 1)
-            );
+            using var JointBuffer = accelerate.Allocate2DDenseX<double>(new Index2D(firstMaxVal + 1, secondMaxVal + 1));
 
             //setBuffToValue2DKern(JointBuffer.Extent.ToIntIndex(), JointBuffer.View, 0.0);
             // setBuffToValueDoubleKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, 0.0);
@@ -464,9 +460,10 @@ namespace CSMI
 
             var BuildJointFreqKern = accelerate.LoadAutoGroupedStreamKernel<
                 Index1D,
-                ArrayView1D<double, Stride1D.Dense>,
-                ArrayView1D<double, Stride1D.Dense>,
-                ArrayView1D<double, Stride1D.Dense>
+                ArrayView<double>,
+                ArrayView<double>,
+                ArrayView<double>,
+                long
             >(BuildJointFreqKernel2);
 
             var setBuffToValue2DKern = accelerate.LoadAutoGroupedStreamKernel<
@@ -484,11 +481,12 @@ namespace CSMI
 
             var IndexedCalcJointEntropyKern = accelerate.LoadAutoGroupedStreamKernel<
                 Index1D,
-                ArrayView1D<double, Stride1D.Dense>,
-                ArrayView1D<double, Stride1D.Dense>,
-                ArrayView1D<double, Stride1D.Dense>,
-                ArrayView1D<double, Stride1D.Dense>,
-                int
+                ArrayView<double>,
+                ArrayView<double>,
+                ArrayView<double>,
+                ArrayView<double>,
+                int,
+                long
             >(IndexedCalcJointEntropyKernel2);
 
             var setBuffToValueDoubleKern = accelerate.LoadAutoGroupedStreamKernel<
@@ -518,12 +516,146 @@ namespace CSMI
 
             int firstMaxVal = FirstMaxVal.GetAsArray1D()[0];
             int secondMaxVal = SecondMaxVal.GetAsArray1D()[0];
-            Console.WriteLine($"FirstMaxVal = {firstMaxVal}");
-            Console.WriteLine($"SecondMaxVal = {secondMaxVal}");
+            // Console.WriteLine($"FirstMaxVal = {firstMaxVal:n0}");
+            // Console.WriteLine($"SecondMaxVal = {secondMaxVal:n0}");
+            int firstMinVal = FirstMinVal.GetAsArray1D()[0];
+            int secondMinVal = SecondMinVal.GetAsArray1D()[0];
+            // Console.WriteLine($"FirstMinVal = {firstMinVal:n0}");
+            // Console.WriteLine($"SecondMinVal = {secondMinVal:n0}");
 
-            int maxIndexVal = szudzikPair(firstMaxVal, secondMaxVal);
-            Console.WriteLine($"MaxPossibleIndex = {maxIndexVal}");
-            using var JointBuffer = accelerate.Allocate1D<double>(new Index1D(maxIndexVal));
+            long maxIndexVal = szudzikPair(firstMaxVal, secondMaxVal);
+            byte maxOrderMagnitude = (byte)maxIndexVal.ToString().Length;
+            Console.WriteLine($"MaxPossiblePair = {maxIndexVal:n0} with {maxOrderMagnitude} digits");
+            long minIndexVal = szudzikPair(firstMinVal, secondMinVal);
+            Console.WriteLine($"MinPossiblePair = {minIndexVal:n0}");
+            using var JointBuffer = accelerate.Allocate1D<double>(maxIndexVal - minIndexVal);
+            JointBuffer.MemSetToZero();
+
+            BuildJointFreqKern(
+                SecondNormBuffer.Extent.ToIntIndex(),
+                FirstNormBuffer.View,
+                SecondNormBuffer.View,
+                JointBuffer.View,
+                minIndexVal
+            );
+
+            IndexedCalcJointEntropyKern(
+                SecondNormBuffer.Extent.ToIntIndex(),
+                JointBuffer.View,
+                FirstNormBuffer.View,
+                SecondNormBuffer.View,
+                EntropyBuffer.View,
+                firstVector.GetLength(0),
+                minIndexVal
+            );
+
+            double answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(LOG_BASE);
+            accelerate.Dispose();
+            return answer;
+        }
+
+        public double calculateJointEntropy3(double[] firstVector, double[] secondVector)
+        {
+            using Accelerator accelerate = this.dev.CreateAccelerator(this.context);
+            using var FirstBuffer = accelerate.Allocate1D<double>(new Index1D(firstVector.GetLength(0)));
+            using var SecondBuffer = accelerate.Allocate1D<double>(new Index1D(secondVector.GetLength(0)));
+
+            FirstBuffer.CopyFromCPU(firstVector);
+            SecondBuffer.CopyFromCPU(secondVector);
+
+            using var FirstNormBuffer = accelerate.Allocate1D<double>(new Index1D(firstVector.GetLength(0)));
+            using var SecondNormBuffer = accelerate.Allocate1D<double>(new Index1D(secondVector.GetLength(0)));
+            using var FirstMaxVal = accelerate.Allocate1D<int>(new Index1D(1));
+            using var FirstMinVal = accelerate.Allocate1D<int>(new Index1D(1));
+
+            using var SecondMaxVal = accelerate.Allocate1D<int>(new Index1D(1));
+            using var SecondMinVal = accelerate.Allocate1D<int>(new Index1D(1));
+            using var EntropyBuffer = accelerate.Allocate1D<double>(new Index1D(1));
+            using var TestBuffer = accelerate.Allocate1D<double>(new Index1D(1));
+
+            var GetMaxValKern = accelerate.LoadAutoGroupedStreamKernel<
+                Index1D,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<int, Stride1D.Dense>,
+                ArrayView1D<int, Stride1D.Dense>
+            >(GetMaxMinValKernal);
+            var InitMaxMinKern = accelerate.LoadAutoGroupedStreamKernel<
+                Index1D,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<int, Stride1D.Dense>,
+                ArrayView1D<int, Stride1D.Dense>
+            >(InitMaxMinKernel);
+            var normalizeArrayKern = accelerate.LoadAutoGroupedStreamKernel<
+                Index1D,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<int, Stride1D.Dense>
+            >(normalizeArrayKernel);
+
+            var BuildJointFreqKern = accelerate.LoadAutoGroupedStreamKernel<
+                Index1D,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView2D<double, Stride2D.DenseX>
+            >(BuildJointFreqKernel3);
+
+            var setBuffToValue2DKern = accelerate.LoadAutoGroupedStreamKernel<
+                Index2D,
+                ArrayView2D<double, Stride2D.DenseX>,
+                double
+            >(setBuffToValue2DKernal);
+
+            var CalcJointEntropyKern = accelerate.LoadAutoGroupedStreamKernel<
+                Index2D,
+                ArrayView2D<double, Stride2D.DenseX>,
+                ArrayView1D<double, Stride1D.Dense>,
+                int
+            >(CalcJointEntropyKernel);
+
+            var IndexedCalcJointEntropyKern = accelerate.LoadAutoGroupedStreamKernel<
+                Index1D,
+                ArrayView2D<double, Stride2D.DenseX>,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>,
+                int
+            >(IndexedCalcJointEntropyKernel3);
+
+            var setBuffToValueDoubleKern = accelerate.LoadAutoGroupedStreamKernel<
+                Index1D,
+                ArrayView1D<double, Stride1D.Dense>,
+                double
+            >(setBuffToValueDoubleKernal);
+
+            var BuildFreqKern = accelerate.LoadAutoGroupedStreamKernel<
+                Index1D,
+                ArrayView1D<double, Stride1D.Dense>,
+                ArrayView1D<double, Stride1D.Dense>
+            >(BuildFreqAdjustedKernel);
+
+            InitMaxMinKern(FirstMaxVal.Extent.ToIntIndex(), FirstBuffer.View, FirstMaxVal.View, FirstMinVal.View);
+            GetMaxValKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, FirstMaxVal.View, FirstMinVal.View);
+            InitMaxMinKern(SecondMaxVal.Extent.ToIntIndex(), SecondBuffer.View, SecondMaxVal.View, SecondMinVal.View);
+            GetMaxValKern(SecondBuffer.Extent.ToIntIndex(), SecondBuffer.View, SecondMaxVal.View, SecondMinVal.View);
+            // csharpier-ignore-start
+            normalizeArrayKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, FirstNormBuffer.View, FirstMinVal);
+            normalizeArrayKern(SecondBuffer.Extent.ToIntIndex(), SecondBuffer.View, SecondNormBuffer.View, SecondMinVal);
+            // csharpier-ignore-end
+
+            int firstMaxVal = FirstMaxVal.GetAsArray1D()[0];
+            int secondMaxVal = SecondMaxVal.GetAsArray1D()[0];
+            Console.WriteLine($"FirstMaxVal = {firstMaxVal:n0}");
+            Console.WriteLine($"SecondMaxVal = {secondMaxVal:n0}");
+
+            long maxIndexVal = szudzikPair(firstMaxVal, secondMaxVal);
+            byte maxOrderMagnitude = (byte)maxIndexVal.ToString().Length;
+            long maxIndexValSqrt = (long)Math.Ceiling(Math.Sqrt(maxIndexVal));
+            Console.WriteLine(
+                $"MaxPossiblePair = {maxIndexVal:n0} with {maxOrderMagnitude} digits, with matrix rank {maxIndexValSqrt:n0}"
+            );
+            using var JointBuffer = accelerate.Allocate2DDenseX<double>(
+                new LongIndex2D(maxIndexValSqrt, maxIndexValSqrt)
+            );
 
             BuildJointFreqKern(
                 SecondNormBuffer.Extent.ToIntIndex(),
@@ -703,6 +835,8 @@ namespace CSMI
             // print1d(EntropyBuffer.GetAsArray1D());
             //double answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(LOG_BASE);
             answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(LOG_BASE);
+            // print1d(FirstNormBuffer.GetAsArray1D());
+            // print1d(SecondNormBuffer.GetAsArray1D());
             accelerate.Dispose();
             return answer;
         }
@@ -1971,7 +2105,27 @@ namespace CSMI
 
         static void IndexedCalcJointEntropyKernel2(
             Index1D index,
-            ArrayView1D<double, Stride1D.Dense> FreqView,
+            ArrayView<double> FreqView,
+            ArrayView<double> FirstView,
+            ArrayView<double> SecondView,
+            ArrayView<double> entropy,
+            int length,
+            long minSzudzikPair
+        )
+        {
+            double val;
+            var ind2 = szudzikPair((int)FirstView[index] - minSzudzikPair, (int)SecondView[index] - minSzudzikPair);
+            if (FreqView[ind2] > 0)
+            {
+                val = -1 * (FreqView[ind2] / (double)length) * Math.Log((FreqView[ind2] / (double)length));
+                val = val / FreqView[ind2];
+                Atomic.Add(ref entropy[new Index1D(0)], val);
+            }
+        }
+
+        static void IndexedCalcJointEntropyKernel3(
+            Index1D index,
+            ArrayView2D<double, Stride2D.DenseX> FreqView,
             ArrayView1D<double, Stride1D.Dense> FirstView,
             ArrayView1D<double, Stride1D.Dense> SecondView,
             ArrayView1D<double, Stride1D.Dense> entropy,
@@ -1979,7 +2133,7 @@ namespace CSMI
         )
         {
             double val;
-            Index1D ind2 = new Index1D(szudzikPair((int)FirstView[index], (int)SecondView[index]));
+            Index2D ind2 = new Index2D((int)FirstView[index], (int)SecondView[index]);
             if (FreqView[ind2] > 0)
             {
                 val = -1 * (FreqView[ind2] / (double)length) * Math.Log((FreqView[ind2] / (double)length));
@@ -2134,7 +2288,6 @@ namespace CSMI
             {
                 //if(Math.Floor(first[index.X]) == Math.Floor(first[index.Y]) && Math.Floor(second[index.X]) == Math.Floor(second[index.Y])){
                 Atomic.Add(ref output[new Index2D((int)first[index], (int)second[index])], 1.0);
-
             }
             //}
             // if(Math.Floor(first[index.X]) == Math.Floor(first[index.Y])){
@@ -2148,15 +2301,31 @@ namespace CSMI
 
         static void BuildJointFreqKernel2(
             Index1D index,
-            ArrayView1D<double, Stride1D.Dense> first,
-            ArrayView1D<double, Stride1D.Dense> second,
-            ArrayView1D<double, Stride1D.Dense> output
+            ArrayView<double> first,
+            ArrayView<double> second,
+            ArrayView<double> output,
+            long minSzudzikPair
         )
         {
             if (!(Double.IsNaN(first[index])) && !(Double.IsNaN(second[index])))
             {
-                Atomic.Add(ref output[new Index1D(szudzikPair((int)first[index], (int)second[index]))], 1.0);
+                Atomic.Add(
+                    ref output[(szudzikPair((int)first[index] - minSzudzikPair, (int)second[index] - minSzudzikPair))],
+                    1.0
+                );
+            }
+        }
 
+        static void BuildJointFreqKernel3(
+            Index1D index,
+            ArrayView1D<double, Stride1D.Dense> first,
+            ArrayView1D<double, Stride1D.Dense> second,
+            ArrayView2D<double, Stride2D.DenseX> output
+        )
+        {
+            if (!(Double.IsNaN(first[index])) && !(Double.IsNaN(second[index])))
+            {
+                Atomic.Add(ref output[new Index2D((int)first[index], (int)second[index])], 1.0);
             }
         }
 
@@ -2217,8 +2386,8 @@ namespace CSMI
 
             for (int i = 0; i < length; i++)
             {
-                numbers[i] = rand.NextDouble() * 10000;
-                // numbers[i] = rand.NextDouble() * 100000; // This fails when the number is too big.
+                // numbers[i] = rand.NextDouble() * 10000;
+                numbers[i] = rand.NextDouble() * 100000; // This fails when the number is too big.
             }
 
             return numbers;
@@ -2231,10 +2400,22 @@ namespace CSMI
         {
             // Fixed data for reproducible results
             double[] a = new[] { 4.2, 5.43, 3.221, 7.34235, 1.931, 1.2, 5.43, 8.0, 7.34235, 1.931 };
+            // double[] a = new[] { 4.2, -5.43, -3.221, -7.34235, -1.931, -1.2, -5.43, -8.0, -7.34235, -1.931 };
             double[] b = new[] { 2.2, 3.43, 1.221, 9.34235, 7.931, 7.2, 4.43, 7.0, 7.34235, 34.931 };
             // double[] a = new[] { 1.2, 2.4, 1.1, 3.1, 4.1, 5.1, 6.1, 7.1, 8.1, 9.1 };
             // double[] b = new[] { 2.2, 2.4, 2.1, 3.1, 4.1, 5.1, 6.1, 7.1, 8.1, 9.1 };
             double[] c = new[] { 2.2, 3.43, 2.221, 2.34235, 3.931, 3.2, 4.43, 7.0, 7.34235, 34.931 };
+
+            // Test with bigger values
+            // int decimalPlacesError = 2;
+            // int numToMultiply = (int)Math.Pow(10, decimalPlacesError);
+            // for (int i = 0; i < a.Length; i++)
+            // {
+            //     a[i] *= numToMultiply;
+            //     b[i] *= numToMultiply;
+            //     c[i] *= numToMultiply;
+
+            // }
 
             // These are the results obtained from the Java implementation of this library for each function.
             var javaResultsMap = new Dictionary<int, (string name, double javaResult)>()
@@ -2251,6 +2432,7 @@ namespace CSMI
                 Utils.MeasureExecutionTime(javaResultsMap[1].name, () => calculateConditionalEntropy(a, b), printOutput: true),
                 // Utils.MeasureExecutionTime(javaResultsMap[2].name, () => calculateJointEntropy(a, b), printOutput: true),
                 Utils.MeasureExecutionTime(javaResultsMap[2].name, () => calculateJointEntropy2(a, b), printOutput: true),
+                // Utils.MeasureExecutionTime(javaResultsMap[2].name, () => calculateJointEntropy3(a, b), printOutput: true),
                 Utils.MeasureExecutionTime(javaResultsMap[3].name, () => calculateMutualInformation(a, b), printOutput: true),
                 Utils.MeasureExecutionTime(javaResultsMap[4].name, () => calculateConditionalMutualInformation(a, b, c), printOutput: true),
             };
@@ -2283,6 +2465,7 @@ namespace CSMI
             // Utils.MeasureExecutionTime("Calculate Conditional Entropy", () => calculateConditionalEntropy(a, b));
             // Utils.MeasureExecutionTime("Calculate Joint Entropy", () => calculateJointEntropy(a, b));
             Utils.MeasureExecutionTime("Calculate Joint Entropy 2", () => calculateJointEntropy2(a, b));
+            // Utils.MeasureExecutionTime("Calculate Joint Entropy 3", () => calculateJointEntropy3(a, b));
             // Utils.MeasureExecutionTime("Mutual Information", () => calculateMutualInformation(a, b));
             // Utils.MeasureExecutionTime("Conditional Mutual Information", () => calculateConditionalMutualInformation(a, b, c));
             // csharpier-ignore-end
@@ -2299,6 +2482,8 @@ namespace CSMI
             Console.WriteLine("Options:");
             Console.WriteLine("0 (or none specified) -> Test Reproducible");
             Console.WriteLine("1 -> Test Random");
+            Console.WriteLine("WARNING: This library will not work with negative numbers");
+            Console.WriteLine(new string('=', 10));
             Console.WriteLine($"Args: {string.Join(" ", args)}");
             int option_selected = 0;
             if (args.Length != 0)
