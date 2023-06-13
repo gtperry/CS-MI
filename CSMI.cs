@@ -377,15 +377,18 @@ namespace CSMI
             normalizeArrayKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, FirstNormBuffer.View, FirstMinVal);
             normalizeArrayKern(SecondBuffer.Extent.ToIntIndex(), SecondBuffer.View, SecondNormBuffer.View, SecondMinVal);
             // csharpier-ignore-end
+
             // Console.WriteLine("Norms");
             // print1d(FirstNormBuffer.GetAsArray1D());
             // print1d(SecondNormBuffer.GetAsArray1D());
 
+            // csharpier-ignore-start
             // Reusing these variables from before because we don't need the original values anymore now that everything is normalized
             InitMaxMinKern(FirstMaxVal.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
             GetMaxValKern(FirstNormBuffer.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
             InitMaxMinKern(SecondMaxVal.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
             GetMaxValKern(SecondNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
+            // csharpier-ignore-end
 
             int firstMaxVal = FirstMaxVal.GetAsArray1D()[0];
             int secondMaxVal = SecondMaxVal.GetAsArray1D()[0];
@@ -523,11 +526,13 @@ namespace CSMI
             // Console.WriteLine($"FirstNormBuffer: [{string.Join(", ", FirstNormBuffer.GetAsArray1D())}]");
             // Console.WriteLine($"SecondNormBuffer: [{string.Join(", ", SecondNormBuffer.GetAsArray1D())}]");
 
+            // csharpier-ignore-start
             // Reusing these variables from before because we don't need the original values anymore now that everything is normalized
             InitMaxMinKern(FirstMaxVal.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
             GetMaxValKern(FirstNormBuffer.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
             InitMaxMinKern(SecondMaxVal.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
             GetMaxValKern(SecondNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
+            // csharpier-ignore-end
 
             int firstMaxVal = FirstMaxVal.GetAsArray1D()[0];
             int secondMaxVal = SecondMaxVal.GetAsArray1D()[0];
@@ -791,11 +796,13 @@ namespace CSMI
                 SecondMinVal
             );
 
+            // csharpier-ignore-start
             // Reusing these variables from before because we don't need the original values anymore now that everything is normalized
             InitMaxMinKern(FirstMaxVal.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
             GetMaxValKern(FirstNormBuffer.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
             InitMaxMinKern(SecondMaxVal.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
             GetMaxValKern(SecondNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
+            // csharpier-ignore-end
 
             // Console.WriteLine("Norms");
             // print1d(FirstNormBuffer.GetAsArray1D());
@@ -1121,11 +1128,13 @@ namespace CSMI
                 SecondMinVal
             );
 
+            // csharpier-ignore-start
             // Reusing these variables from before because we don't need the original values anymore now that everything is normalized
             InitMaxMinKern(FirstMaxVal.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
             GetMaxValKern(FirstNormBuffer.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
             InitMaxMinKern(SecondMaxVal.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
             GetMaxValKern(SecondNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
+            // csharpier-ignore-end
 
             int firstnumstates = FirstMaxVal.GetAsArray1D()[0];
             int secondnumstates = SecondMaxVal.GetAsArray1D()[0];
@@ -1556,6 +1565,7 @@ namespace CSMI
             // accelerate.DefaultStream.Synchronize();
             // watch.Start();
 
+            // csharpier-ignore-start
             // Reusing these variables from before because we don't need the original values anymore now that everything is normalized
             InitMaxMinKern(FirstMaxVal.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
             GetMaxValKern(FirstNormBuffer.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
@@ -1563,6 +1573,7 @@ namespace CSMI
             GetMaxValKern(SecondNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
             InitMaxMinKern(CondMaxVal.Extent.ToIntIndex(), CondNormBuffer.View, CondMaxVal.View, CondMinVal.View);
             GetMaxValKern(CondNormBuffer.Extent.ToIntIndex(), CondNormBuffer.View, CondMaxVal.View, CondMinVal.View);
+            // csharpier-ignore-end
 
             int firstnumstates = FirstMaxVal.GetAsArray1D()[0];
             int secondnumstates = SecondMaxVal.GetAsArray1D()[0];
