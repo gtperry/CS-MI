@@ -373,11 +373,13 @@ namespace CSMI
             //Console.WriteLine(FirstMaxVal.GetAsArray1D()[0]);
             InitMaxMinKern(SecondMaxVal.Extent.ToIntIndex(), SecondBuffer.View, SecondMaxVal.View, SecondMinVal.View);
             GetMaxValKern(SecondBuffer.Extent.ToIntIndex(), SecondBuffer.View, SecondMaxVal.View, SecondMinVal.View);
-            // csharpier-ignore-start
             normalizeArrayKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, FirstNormBuffer.View, FirstMinVal);
-            normalizeArrayKern(SecondBuffer.Extent.ToIntIndex(), SecondBuffer.View, SecondNormBuffer.View, SecondMinVal);
-            // csharpier-ignore-end
-
+            normalizeArrayKern(
+                SecondBuffer.Extent.ToIntIndex(),
+                SecondBuffer.View,
+                SecondNormBuffer.View,
+                SecondMinVal
+            );
             // Console.WriteLine("Norms");
             // print1d(FirstNormBuffer.GetAsArray1D());
             // print1d(SecondNormBuffer.GetAsArray1D());
@@ -395,7 +397,7 @@ namespace CSMI
 
             using var JointBuffer = accelerate.Allocate2DDenseX<double>(new Index2D(firstMaxVal + 1, secondMaxVal + 1));
 
-            //setBuffToValue2DKern(JointBuffer.Extent.ToIntIndex(), JointBuffer.View, 0.0);
+            // setBuffToValue2DKern(JointBuffer.Extent.ToIntIndex(), JointBuffer.View, 0.0);
             // setBuffToValueDoubleKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, 0.0);
             // setBuffToValueDoubleKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, 0.0);
 
@@ -795,7 +797,6 @@ namespace CSMI
                 SecondNormBuffer.View,
                 SecondMinVal
             );
-
             // csharpier-ignore-start
             // Reusing these variables from before because we don't need the original values anymore now that everything is normalized
             InitMaxMinKern(FirstMaxVal.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
@@ -1127,7 +1128,6 @@ namespace CSMI
                 SecondNormBuffer.View,
                 SecondMinVal
             );
-
             // csharpier-ignore-start
             // Reusing these variables from before because we don't need the original values anymore now that everything is normalized
             InitMaxMinKern(FirstMaxVal.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
