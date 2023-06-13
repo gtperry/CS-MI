@@ -380,6 +380,13 @@ namespace CSMI
             // Console.WriteLine("Norms");
             // print1d(FirstNormBuffer.GetAsArray1D());
             // print1d(SecondNormBuffer.GetAsArray1D());
+
+            // Reusing these variables from before because we don't need the original values anymore now that everything is normalized
+            InitMaxMinKern(FirstMaxVal.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
+            GetMaxValKern(FirstNormBuffer.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
+            InitMaxMinKern(SecondMaxVal.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
+            GetMaxValKern(SecondNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
+
             int firstMaxVal = FirstMaxVal.GetAsArray1D()[0];
             int secondMaxVal = SecondMaxVal.GetAsArray1D()[0];
 
@@ -513,6 +520,14 @@ namespace CSMI
                 SecondNormBuffer.View,
                 SecondMinVal
             );
+            // Console.WriteLine($"FirstNormBuffer: [{string.Join(", ", FirstNormBuffer.GetAsArray1D())}]");
+            // Console.WriteLine($"SecondNormBuffer: [{string.Join(", ", SecondNormBuffer.GetAsArray1D())}]");
+
+            // Reusing these variables from before because we don't need the original values anymore now that everything is normalized
+            InitMaxMinKern(FirstMaxVal.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
+            GetMaxValKern(FirstNormBuffer.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
+            InitMaxMinKern(SecondMaxVal.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
+            GetMaxValKern(SecondNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
 
             int firstMaxVal = FirstMaxVal.GetAsArray1D()[0];
             int secondMaxVal = SecondMaxVal.GetAsArray1D()[0];
@@ -525,9 +540,9 @@ namespace CSMI
 
             long maxIndexVal = szudzikPair(firstMaxVal, secondMaxVal);
             byte maxOrderMagnitude = (byte)maxIndexVal.ToString().Length;
-            Console.WriteLine($"MaxPossiblePair = {maxIndexVal:n0} with {maxOrderMagnitude} digits");
+            // Console.WriteLine($"MaxPossiblePair = {maxIndexVal:n0} with {maxOrderMagnitude} digits");
             long minIndexVal = szudzikPair(firstMinVal, secondMinVal);
-            Console.WriteLine($"MinPossiblePair = {minIndexVal:n0}");
+            // Console.WriteLine($"MinPossiblePair = {minIndexVal:n0}");
             using var JointBuffer = accelerate.Allocate1D<double>(maxIndexVal - minIndexVal);
             JointBuffer.MemSetToZero();
 
@@ -775,6 +790,13 @@ namespace CSMI
                 SecondNormBuffer.View,
                 SecondMinVal
             );
+
+            // Reusing these variables from before because we don't need the original values anymore now that everything is normalized
+            InitMaxMinKern(FirstMaxVal.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
+            GetMaxValKern(FirstNormBuffer.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
+            InitMaxMinKern(SecondMaxVal.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
+            GetMaxValKern(SecondNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
+
             // Console.WriteLine("Norms");
             // print1d(FirstNormBuffer.GetAsArray1D());
             // print1d(SecondNormBuffer.GetAsArray1D());
@@ -1099,6 +1121,12 @@ namespace CSMI
                 SecondMinVal
             );
 
+            // Reusing these variables from before because we don't need the original values anymore now that everything is normalized
+            InitMaxMinKern(FirstMaxVal.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
+            GetMaxValKern(FirstNormBuffer.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
+            InitMaxMinKern(SecondMaxVal.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
+            GetMaxValKern(SecondNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
+
             int firstnumstates = FirstMaxVal.GetAsArray1D()[0];
             int secondnumstates = SecondMaxVal.GetAsArray1D()[0];
             //Console.WriteLine(firstnumstates);
@@ -1324,7 +1352,6 @@ namespace CSMI
             return MIanswers;
         }
 
-        // TODO: Doesn't work for large values?
         public double calculateConditionalMutualInformation(
             double[] firstVector,
             double[] secondVector,
@@ -1528,6 +1555,14 @@ namespace CSMI
 
             // accelerate.DefaultStream.Synchronize();
             // watch.Start();
+
+            // Reusing these variables from before because we don't need the original values anymore now that everything is normalized
+            InitMaxMinKern(FirstMaxVal.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
+            GetMaxValKern(FirstNormBuffer.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
+            InitMaxMinKern(SecondMaxVal.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
+            GetMaxValKern(SecondNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, SecondMaxVal.View, SecondMinVal.View);
+            InitMaxMinKern(CondMaxVal.Extent.ToIntIndex(), CondNormBuffer.View, CondMaxVal.View, CondMinVal.View);
+            GetMaxValKern(CondNormBuffer.Extent.ToIntIndex(), CondNormBuffer.View, CondMaxVal.View, CondMinVal.View);
 
             int firstnumstates = FirstMaxVal.GetAsArray1D()[0];
             int secondnumstates = SecondMaxVal.GetAsArray1D()[0];
@@ -2386,8 +2421,9 @@ namespace CSMI
 
             for (int i = 0; i < length; i++)
             {
-                // numbers[i] = rand.NextDouble() * 10000;
-                numbers[i] = rand.NextDouble() * 100000; // This fails when the number is too big.
+                // numbers[i] = rand.NextDouble() * 10000; // This works. Seems to be the limit (dependent on GPU memory).
+                // numbers[i] = rand.NextDouble() * 100000; // This fails because the numbers are too big and too far apart.
+                numbers[i] = rand.NextDouble() * 10 + 1000000; // This now works with bigger numbers, as long as they are close together.
             }
 
             return numbers;
@@ -2407,15 +2443,16 @@ namespace CSMI
             double[] c = new[] { 2.2, 3.43, 2.221, 2.34235, 3.931, 3.2, 4.43, 7.0, 7.34235, 34.931 };
 
             // Test with bigger values
-            // int decimalPlacesError = 2;
-            // int numToMultiply = (int)Math.Pow(10, decimalPlacesError);
-            // for (int i = 0; i < a.Length; i++)
-            // {
-            //     a[i] *= numToMultiply;
-            //     b[i] *= numToMultiply;
-            //     c[i] *= numToMultiply;
-
-            // }
+            int orderOfMagnitude = 5;
+            int numToMultiply = (int)Math.Pow(10, orderOfMagnitude);
+            for (int i = 0; i < a.Length; i++)
+            {
+                // Addition doesn't change the results, but multiplication does.
+                a[i] += numToMultiply;
+                b[i] += numToMultiply;
+                c[i] += numToMultiply;
+            }
+            Console.WriteLine($"a: [{string.Join(", ", a)}]");
 
             // These are the results obtained from the Java implementation of this library for each function.
             var javaResultsMap = new Dictionary<int, (string name, double javaResult)>()
@@ -2430,8 +2467,8 @@ namespace CSMI
             var resultsList = new double[]{
                 Utils.MeasureExecutionTime(javaResultsMap[0].name, () => calculateEntropy(a), printOutput: true),
                 Utils.MeasureExecutionTime(javaResultsMap[1].name, () => calculateConditionalEntropy(a, b), printOutput: true),
-                // Utils.MeasureExecutionTime(javaResultsMap[2].name, () => calculateJointEntropy(a, b), printOutput: true),
-                Utils.MeasureExecutionTime(javaResultsMap[2].name, () => calculateJointEntropy2(a, b), printOutput: true),
+                Utils.MeasureExecutionTime(javaResultsMap[2].name, () => calculateJointEntropy(a, b), printOutput: true),
+                // Utils.MeasureExecutionTime(javaResultsMap[2].name, () => calculateJointEntropy2(a, b), printOutput: true),
                 // Utils.MeasureExecutionTime(javaResultsMap[2].name, () => calculateJointEntropy3(a, b), printOutput: true),
                 Utils.MeasureExecutionTime(javaResultsMap[3].name, () => calculateMutualInformation(a, b), printOutput: true),
                 Utils.MeasureExecutionTime(javaResultsMap[4].name, () => calculateConditionalMutualInformation(a, b, c), printOutput: true),
@@ -2462,12 +2499,12 @@ namespace CSMI
             double[] c = GenerateRandomNumbers(length);
             // csharpier-ignore-start
             Utils.MeasureExecutionTime("Calculate Entropy", () => calculateEntropy(a));
-            // Utils.MeasureExecutionTime("Calculate Conditional Entropy", () => calculateConditionalEntropy(a, b));
-            // Utils.MeasureExecutionTime("Calculate Joint Entropy", () => calculateJointEntropy(a, b));
-            Utils.MeasureExecutionTime("Calculate Joint Entropy 2", () => calculateJointEntropy2(a, b));
+            Utils.MeasureExecutionTime("Calculate Conditional Entropy", () => calculateConditionalEntropy(a, b));
+            Utils.MeasureExecutionTime("Calculate Joint Entropy", () => calculateJointEntropy(a, b));
+            // Utils.MeasureExecutionTime("Calculate Joint Entropy 2", () => calculateJointEntropy2(a, b));
             // Utils.MeasureExecutionTime("Calculate Joint Entropy 3", () => calculateJointEntropy3(a, b));
-            // Utils.MeasureExecutionTime("Mutual Information", () => calculateMutualInformation(a, b));
-            // Utils.MeasureExecutionTime("Conditional Mutual Information", () => calculateConditionalMutualInformation(a, b, c));
+            Utils.MeasureExecutionTime("Mutual Information", () => calculateMutualInformation(a, b));
+            Utils.MeasureExecutionTime("Conditional Mutual Information", () => calculateConditionalMutualInformation(a, b, c));
             // csharpier-ignore-end
 
             Console.WriteLine();
