@@ -396,6 +396,7 @@ namespace CSMI
             int secondMaxVal = SecondMaxVal.GetAsArray1D()[0];
 
             using var JointBuffer = accelerate.Allocate2DDenseX<double>(new Index2D(firstMaxVal + 1, secondMaxVal + 1));
+            // Console.WriteLine($"JointBuffer Size: {JointBuffer.Length}");
 
             // setBuffToValue2DKern(JointBuffer.Extent.ToIntIndex(), JointBuffer.View, 0.0);
             // setBuffToValueDoubleKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, 0.0);
@@ -430,6 +431,12 @@ namespace CSMI
             return answer;
         }
 
+        /// <summary>
+        /// Alternate implementation of JointEntropy using a 1D Buffer (szudzik for hashing) instead of a 2D Buffer.
+        /// </summary>
+        /// <param name="firstVector"></param>
+        /// <param name="secondVector"></param>
+        /// <returns></returns>
         public double calculateJointEntropy2(double[] firstVector, double[] secondVector)
         {
             using Accelerator accelerate = this.dev.CreateAccelerator(this.context);
@@ -551,7 +558,8 @@ namespace CSMI
             long minIndexVal = szudzikPair(firstMinVal, secondMinVal);
             // Console.WriteLine($"MinPossiblePair = {minIndexVal:n0}");
             using var JointBuffer = accelerate.Allocate1D<double>(maxIndexVal - minIndexVal);
-            JointBuffer.MemSetToZero();
+            // JointBuffer.MemSetToZero();
+            // Console.WriteLine($"JointBuffer Size: {JointBuffer.Length:n0}");
 
             BuildJointFreqKern(
                 SecondNormBuffer.Extent.ToIntIndex(),
@@ -576,6 +584,7 @@ namespace CSMI
             return answer;
         }
 
+        // TODO: Function not finished, just testing for now
         public double calculateJointEntropy3(double[] firstVector, double[] secondVector)
         {
             using Accelerator accelerate = this.dev.CreateAccelerator(this.context);
@@ -2404,27 +2413,6 @@ namespace CSMI
             Console.WriteLine("]");
         }
 
-        // void testMulti( List<double[]> arr){
-        //     List<double> jointEntropyList = new List<double>();
-        //     List<double> ConditionalMIList = new List<double>();
-
-        //     Stopwatch timer = new Stopwatch();
-        //     for(int i = 0; i < arr.GetLength(1); i++){
-        //         for(int j = 0; j < arr.GetLength(1); j++){
-        //             if(i != j){
-        //                 jointEntropyList.Add(calculateJointEntropy(arr[i],arr[j]));
-        //                 for(int k = 0; k < arr.GetLength(1); k++){
-        //                     if (k != j && k != i){
-        //                         ConditionalMIList.Add(calculateConditionalMutualInformation(arr[i],arr[j], arr[k]));
-        //                     }
-        //                 }
-        //             }
-
-        //         }
-        //     }
-        //     return (jointEntropyList, ConditionalMIList);
-        // }
-
         double[] GenerateRandomNumbers(int length)
         {
             Random rand = new Random();
@@ -2432,6 +2420,7 @@ namespace CSMI
 
             for (int i = 0; i < length; i++)
             {
+                // numbers[i] = rand.NextDouble() * 10;
                 // numbers[i] = rand.NextDouble() * 10000; // This works. Seems to be the limit (dependent on GPU memory).
                 // numbers[i] = rand.NextDouble() * 100000; // This fails because the numbers are too big and too far apart.
                 numbers[i] = rand.NextDouble() * 10 + 1000000; // This now works with bigger numbers, as long as they are close together.
@@ -2480,15 +2469,15 @@ namespace CSMI
                 Utils.MeasureExecutionTime(javaResultsMap[1].name, () => calculateConditionalEntropy(a, b), printOutput: true),
                 Utils.MeasureExecutionTime(javaResultsMap[2].name, () => calculateJointEntropy(a, b), printOutput: true),
                 // Utils.MeasureExecutionTime(javaResultsMap[2].name, () => calculateJointEntropy2(a, b), printOutput: true),
-                // Utils.MeasureExecutionTime(javaResultsMap[2].name, () => calculateJointEntropy3(a, b), printOutput: true),
+                // Utils.MeasureExecutionTime(javaResultsMap[2].name, () => calculateJointEntropy3(a, b), printOutput: true), // TODO: finish or remove
                 Utils.MeasureExecutionTime(javaResultsMap[3].name, () => calculateMutualInformation(a, b), printOutput: true),
                 Utils.MeasureExecutionTime(javaResultsMap[4].name, () => calculateConditionalMutualInformation(a, b, c), printOutput: true),
             };
             // csharpier-ignore-end
 
             // See if the functions for the C# vs Java implementation are the same
-            Console.WriteLine("\nJava vs C# return values test results:");
             var decimalPlaces = 12;
+            Console.WriteLine($"\nJava vs C# return values test results, accurate to '{decimalPlaces}' decimal places:");
             for (int i = 0; i < resultsList.Length; i++)
             {
                 var csharpResult = Math.Round(resultsList[i], decimalPlaces);
@@ -2513,7 +2502,7 @@ namespace CSMI
             Utils.MeasureExecutionTime("Calculate Conditional Entropy", () => calculateConditionalEntropy(a, b));
             Utils.MeasureExecutionTime("Calculate Joint Entropy", () => calculateJointEntropy(a, b));
             // Utils.MeasureExecutionTime("Calculate Joint Entropy 2", () => calculateJointEntropy2(a, b));
-            // Utils.MeasureExecutionTime("Calculate Joint Entropy 3", () => calculateJointEntropy3(a, b));
+            // Utils.MeasureExecutionTime("Calculate Joint Entropy 3", () => calculateJointEntropy3(a, b)); // TODO: finish or remove
             Utils.MeasureExecutionTime("Mutual Information", () => calculateMutualInformation(a, b));
             Utils.MeasureExecutionTime("Conditional Mutual Information", () => calculateConditionalMutualInformation(a, b, c));
             // csharpier-ignore-end
