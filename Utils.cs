@@ -44,5 +44,10 @@ namespace CSMI
 
             return functionOutput;
         }
+
+        public static long szudzikPair(long x, long y)
+        {
+            return (x >= y ? (x * x) + x + y : (y * y) + x);
+        }
     }
 }
