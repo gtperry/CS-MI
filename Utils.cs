@@ -45,6 +45,44 @@ namespace CSMI
             return functionOutput;
         }
 
+        public static void print1d<T>(T[] array)
+        {
+            Console.WriteLine($"[{string.Join(", ", array)}]");
+        }
+
+        public static void print2d<T>(T[,] array)
+        {
+            Console.WriteLine("[");
+            for (int i = 0; i < array.GetLength(0); i++)
+            {
+                Console.Write("[");
+                for (int j = 0; j < array.GetLength(1); j++)
+                {
+                    Console.Write("{0}", array[i, j]);
+                    if (j < array.GetLength(1) - 1)
+                    {
+                        Console.Write(", ");
+                    }
+                }
+                Console.Write("]");
+                if (i < array.GetLength(0) - 1)
+                {
+                    Console.WriteLine(",");
+                }
+            }
+            Console.WriteLine();
+            Console.WriteLine("]");
+        }
+
+        /// <summary>
+        /// Szudzik pairing function to uniquely encode two natural numbers 
+        /// into a single natural number with 100% packing efficiency.
+        /// This version only works with positive numbers.
+        /// <br/>Source: https://www.vertexfragment.com/ramblings/cantor-szudzik-pairing-functions/
+        /// </summary>
+        /// <param name="x">First number</param>
+        /// <param name="y">Second number</param>
+        /// <returns></returns>
         public static long szudzikPair(long x, long y)
         {
             return (x >= y ? (x * x) + x + y : (y * y) + x);
