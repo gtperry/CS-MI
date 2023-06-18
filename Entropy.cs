@@ -13,7 +13,7 @@ namespace CSMI
 
         public Entropy(ILGPUInitializer ilgpu)
         {
-            gpu = ilgpu;
+            this.gpu = ilgpu;
         }
 
         #region Methods
@@ -22,8 +22,9 @@ namespace CSMI
             using Accelerator accelerate = gpu.dev.CreateAccelerator(gpu.context);
             using var MVBuffer = accelerate.Allocate1D<double>(new Index1D(dataVector.GetLength(0)));
             using var MVNormBuffer = accelerate.Allocate1D<double>(new Index1D(dataVector.GetLength(0)));
-            //var FreqBuffer = accelerate.Allocate1D<double>(new Index1D(dataVector.GetLength(0)));
+
             MVBuffer.CopyFromCPU(dataVector);
+
             using var MaxVal = accelerate.Allocate1D<int>(new Index1D(1));
             using var MinVal = accelerate.Allocate1D<int>(new Index1D(1));
             using var EntropyBuffer = accelerate.Allocate1D<double>(new Index1D(1));
@@ -65,22 +66,10 @@ namespace CSMI
             InitMaxMinKern(MaxVal.Extent.ToIntIndex(), MVBuffer.View, MaxVal.View, MinVal.View);
             GetMaxValKern(MVBuffer.Extent.ToIntIndex(), MVBuffer.View, MaxVal.View, MinVal.View);
             normalizeArrayKern(MVBuffer.Extent.ToIntIndex(), MVBuffer.View, MVNormBuffer.View, MinVal);
+
             using var FreqBuffer = accelerate.Allocate1D<double>(
                 new Index1D(MaxVal.GetAsArray1D()[0] - MinVal.GetAsArray1D()[0] + 1)
             );
-            //setBuffToValueKern(FreqBuffer.Extent.ToIntIndex(), FreqBuffer.View, 0.0);
-            // if(dataVector.GetLength(0) > MAX_YDIM){
-            //     int zdim = (int)Math.Floor((double)MVBuffer.Extent.ToIntIndex().X/GRIDSIZE) + 1;
-            //     int ydim = GRIDSIZE;
-            //     Console.WriteLine("YDIM AND ZDIM");
-            //     Console.WriteLine(ydim);
-            //     Console.WriteLine(zdim);
-            //     LargeBuildFreqKern(new Index3D(MVBuffer.Extent.ToIntIndex().X,ydim, zdim), MVBuffer.View, FreqBuffer.View, GRIDSIZE, dataVector.GetLength(0));
-            // }
-            // else{
-            //BuildFreqKern(new Index2D(MVBuffer.Extent.ToIntIndex().X,MVBuffer.Extent.ToIntIndex().X), MVBuffer.View, FreqBuffer.View);
-            // BuildFreqKern(MVBuffer.Extent.ToIntIndex(), MVBuffer.View, FreqBuffer.View);
-            //}
 
             BuildFreqKern(MVNormBuffer.Extent.ToIntIndex(), MVNormBuffer.View, FreqBuffer.View);
 
@@ -91,7 +80,6 @@ namespace CSMI
                 dataVector.GetLength(0)
             );
             double answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(Constants.LOG_BASE);
-            // print1d(MVNormBuffer.GetAsArray1D());
             accelerate.Dispose();
             return answer;
         }
@@ -174,6 +162,7 @@ namespace CSMI
                 ArrayView1D<double, Stride1D.Dense>,
                 ArrayView1D<double, Stride1D.Dense>
             >(BuildFreqAdjustedKernel);
+
             InitMaxMinKern(FirstMaxVal.Extent.ToIntIndex(), FirstBuffer.View, FirstMaxVal.View, FirstMinVal.View);
             GetMaxValKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, FirstMaxVal.View, FirstMinVal.View);
             //Console.WriteLine(FirstMaxVal.GetAsArray1D()[0]);
@@ -187,8 +176,8 @@ namespace CSMI
                 SecondMinVal
             );
             // Console.WriteLine("Norms");
-            // print1d(FirstNormBuffer.GetAsArray1D());
-            // print1d(SecondNormBuffer.GetAsArray1D());
+            // Utils.print1d(FirstNormBuffer.GetAsArray1D());
+            // Utils.print1d(SecondNormBuffer.GetAsArray1D());
 
             // csharpier-ignore-start
             // Reusing these variables from before because we don't need the original values anymore now that everything is normalized
@@ -214,9 +203,9 @@ namespace CSMI
                 SecondNormBuffer.View,
                 JointBuffer.View
             );
-            // print1d(FirstNormBuffer.GetAsArray1D());
-            // print1d(SecondNormBuffer.GetAsArray1D());
-            // print2d(JointBuffer.GetAsArray2D());
+            // Utils.print1d(FirstNormBuffer.GetAsArray1D());
+            // Utils.print1d(SecondNormBuffer.GetAsArray1D());
+            // Utils.print2d(JointBuffer.GetAsArray2D());
 
             //CalcJointEntropyKern(JointBuffer.Extent.ToIntIndex(), JointBuffer.View, EntropyBuffer.View, firstVector.GetLength(0));
             IndexedCalcJointEntropyKern(
@@ -227,10 +216,6 @@ namespace CSMI
                 EntropyBuffer.View,
                 firstVector.GetLength(0)
             );
-
-            // Console.WriteLine("joint");
-            // Console.WriteLine(EntropyBuffer.GetAsArray1D()[0]);
-            // Console.WriteLine(TestBuffer.GetAsArray1D()[0]);
 
             double answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(Constants.LOG_BASE);
             accelerate.Dispose();
@@ -522,6 +507,7 @@ namespace CSMI
             using var FirstBuffer = accelerate.Allocate1D<double>(new Index1D(firstVector.GetLength(0)));
             using var SecondBuffer = accelerate.Allocate1D<double>(new Index1D(secondVector.GetLength(0)));
             double answer;
+
             FirstBuffer.CopyFromCPU(firstVector);
             SecondBuffer.CopyFromCPU(secondVector);
 
@@ -541,12 +527,14 @@ namespace CSMI
                 ArrayView1D<int, Stride1D.Dense>,
                 ArrayView1D<int, Stride1D.Dense>
             >(TestGetMaxMinValKernal);
+
             var InitMaxMinKern = accelerate.LoadAutoGroupedStreamKernel<
                 Index1D,
                 ArrayView1D<double, Stride1D.Dense>,
                 ArrayView1D<int, Stride1D.Dense>,
                 ArrayView1D<int, Stride1D.Dense>
             >(InitMaxMinKernel);
+
             var normalizeArrayKern = accelerate.LoadAutoGroupedStreamKernel<
                 Index1D,
                 ArrayView1D<double, Stride1D.Dense>,
@@ -599,20 +587,13 @@ namespace CSMI
 
             InitMaxMinKern(FirstMaxVal.Extent.ToIntIndex(), FirstBuffer.View, FirstMaxVal.View, FirstMinVal.View);
             GetMaxValKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, FirstMaxVal.View, FirstMinVal.View);
-            //Console.WriteLine(FirstMaxVal.GetAsArray1D()[0]);
             InitMaxMinKern(SecondMaxVal.Extent.ToIntIndex(), SecondBuffer.View, SecondMaxVal.View, SecondMinVal.View);
-            //print1d(SecondBuffer.GetAsArray1D());
             GetMaxValKern(SecondBuffer.Extent.ToIntIndex(), SecondBuffer.View, SecondMaxVal.View, SecondMinVal.View);
-            //print1d(SecondMinVal.GetAsArray1D());
-
-            normalizeArrayKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, FirstNormBuffer.View, FirstMinVal);
-            normalizeArrayKern(
-                SecondBuffer.Extent.ToIntIndex(),
-                SecondBuffer.View,
-                SecondNormBuffer.View,
-                SecondMinVal
-            );
             // csharpier-ignore-start
+            // Normalize
+            normalizeArrayKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, FirstNormBuffer.View, FirstMinVal);
+            normalizeArrayKern(SecondBuffer.Extent.ToIntIndex(), SecondBuffer.View, SecondNormBuffer.View, SecondMinVal);
+
             // Reusing these variables from before because we don't need the original values anymore now that everything is normalized
             InitMaxMinKern(FirstMaxVal.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
             GetMaxValKern(FirstNormBuffer.Extent.ToIntIndex(), FirstNormBuffer.View, FirstMaxVal.View, FirstMinVal.View);
@@ -621,8 +602,8 @@ namespace CSMI
             // csharpier-ignore-end
 
             // Console.WriteLine("Norms");
-            // print1d(FirstNormBuffer.GetAsArray1D());
-            // print1d(SecondNormBuffer.GetAsArray1D());
+            // Utils.print1d(FirstNormBuffer.GetAsArray1D());
+            // Utils.print1d(SecondNormBuffer.GetAsArray1D());
             int firstnumstates = FirstMaxVal.GetAsArray1D()[0];
             int secondnumstates = SecondMaxVal.GetAsArray1D()[0];
             // Console.WriteLine(firstnumstates);
@@ -631,19 +612,8 @@ namespace CSMI
             using var JointBuffer = accelerate.Allocate2DDenseX<double>(
                 new Index2D(firstnumstates + 1, secondnumstates + 1)
             );
-            answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(Constants.LOG_BASE);
-
             using var FirstCountMap = accelerate.Allocate1D<double>(new Index1D(firstnumstates));
             using var SecondCountMap = accelerate.Allocate1D<double>(new Index1D(secondnumstates));
-            //setBuffToValue2DKern(JointBuffer.Extent.ToIntIndex(), JointBuffer.View, 0.0);
-            // setBuffToValueDoubleKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, 0.0);
-            // setBuffToValueDoubleKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, 0.0);
-            //Console.WriteLine(EntropyBuffer.GetAsArray1D()[0]);
-            answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(Constants.LOG_BASE);
-            // Console.WriteLine("First and second norm:");
-            //print1d(SecondMinVal.GetAsArray1D());
-            //print1d(SecondNormBuffer.GetAsArray1D());
-            //Console.ReadLine();
 
             BuildJointFreqKern(
                 SecondNormBuffer.Extent.ToIntIndex(),
@@ -651,17 +621,9 @@ namespace CSMI
                 SecondNormBuffer.View,
                 JointBuffer.View
             );
-            // print2d(JointBuffer.GetAsArray2D());
-            //Console.WriteLine(EntropyBuffer.GetAsArray1D()[0]);
-            answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(Constants.LOG_BASE);
+
             BuildFreqKern(SecondNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, SecondCountMap.View);
-            //Console.WriteLine(EntropyBuffer.GetAsArray1D()[0]);
-            // Console.WriteLine("JOINT");
-            //print2d(JointBuffer.GetAsArray2D());
-            // Console.WriteLine("SecondCountMap");
-            //print1d(SecondCountMap.GetAsArray1D());
-            // /CalcConditionalEntropyKern(JointBuffer.Extent.ToIntIndex(), JointBuffer.View, SecondCountMap.View, EntropyBuffer.View, firstVector.GetLength(0));
-            answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(Constants.LOG_BASE);
+
             IndexedCalcConditionalEntropyKern(
                 SecondNormBuffer.Extent.ToIntIndex(),
                 JointBuffer.View,
@@ -672,16 +634,7 @@ namespace CSMI
                 firstVector.GetLength(0)
             );
 
-            // Console.WriteLine("TESTTT");
-            // Console.WriteLine(EntropyBuffer.GetAsArray1D()[0]);
-            // Console.WriteLine(TestBuffer.GetAsArray1D()[0]);
-
-            // Console.WriteLine("ENTROPY ARR");
-            // print1d(EntropyBuffer.GetAsArray1D());
-            //double answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(Constants.LOG_BASE);
             answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(Constants.LOG_BASE);
-            // print1d(FirstNormBuffer.GetAsArray1D());
-            // print1d(SecondNormBuffer.GetAsArray1D());
             accelerate.Dispose();
             return answer;
         }
@@ -693,6 +646,7 @@ namespace CSMI
             using var FirstBuffer = accelerate.Allocate1D<double>(new Index1D(firstVector.GetLength(0)));
             using var SecondBuffer = accelerate.Allocate1D<double>(new Index1D(secondVector.GetLength(0)));
             double answer;
+
             FirstBuffer.CopyFromCPU(firstVector);
             SecondBuffer.CopyFromCPU(secondVector);
 
@@ -712,12 +666,14 @@ namespace CSMI
                 ArrayView1D<int, Stride1D.Dense>,
                 ArrayView1D<int, Stride1D.Dense>
             >(TestGetMaxMinValKernal);
+
             var InitMaxMinKern = accelerate.LoadAutoGroupedStreamKernel<
                 Index1D,
                 ArrayView1D<double, Stride1D.Dense>,
                 ArrayView1D<int, Stride1D.Dense>,
                 ArrayView1D<int, Stride1D.Dense>
             >(InitMaxMinKernel);
+
             var normalizeArrayKern = accelerate.LoadAutoGroupedStreamKernel<
                 Index1D,
                 ArrayView1D<double, Stride1D.Dense>,
@@ -767,26 +723,21 @@ namespace CSMI
                 ArrayView1D<double, Stride1D.Dense>,
                 ArrayView1D<double, Stride1D.Dense>
             >(BuildFreqAdjKernel);
-            // Console.WriteLine("NAN FLOOR");
-            // Console.WriteLine(Math.Floor(Double.NaN));
+
+            // FirstBuffer
             InitMaxMinKern(FirstMaxVal.Extent.ToIntIndex(), FirstBuffer.View, FirstMaxVal.View, FirstMinVal.View);
             GetMaxValKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, FirstMaxVal.View, FirstMinVal.View);
-            //Console.WriteLine(FirstMaxVal.GetAsArray1D()[0]);
+            // SecondBuffer
             InitMaxMinKern(SecondMaxVal.Extent.ToIntIndex(), SecondBuffer.View, SecondMaxVal.View, SecondMinVal.View);
-            //print1d(SecondMinVal.GetAsArray1D());
             GetMaxValKern(SecondBuffer.Extent.ToIntIndex(), SecondBuffer.View, SecondMaxVal.View, SecondMinVal.View);
-            //print1d(SecondMinVal.GetAsArray1D());
-
+            // csharpier-ignore-start -- Normalize
             normalizeArrayKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, FirstNormBuffer.View, FirstMinVal);
-            normalizeArrayKern(
-                SecondBuffer.Extent.ToIntIndex(),
-                SecondBuffer.View,
-                SecondNormBuffer.View,
-                SecondMinVal
-            );
+            normalizeArrayKern(SecondBuffer.Extent.ToIntIndex(), SecondBuffer.View, SecondNormBuffer.View, SecondMinVal);
+            // csharpier-ignore-end
+
             // Console.WriteLine("Norms");
-            // print1d(FirstNormBuffer.GetAsArray1D());
-            // print1d(SecondNormBuffer.GetAsArray1D());
+            // Utils.print1d(FirstNormBuffer.GetAsArray1D());
+            // Utils.print1d(SecondNormBuffer.GetAsArray1D());
             int firstnumstates = FirstMaxVal.GetAsArray1D()[0];
             int secondnumstates = SecondMaxVal.GetAsArray1D()[0];
             // Console.WriteLine(firstnumstates);
@@ -795,19 +746,8 @@ namespace CSMI
             using var JointBuffer = accelerate.Allocate2DDenseX<double>(
                 new Index2D(firstnumstates + 1, secondnumstates + 1)
             );
-            //answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(Constants.LOG_BASE);
-
             using var FirstCountMap = accelerate.Allocate1D<double>(new Index1D(firstnumstates));
             using var SecondCountMap = accelerate.Allocate1D<double>(new Index1D(secondnumstates));
-            //setBuffToValue2DKern(JointBuffer.Extent.ToIntIndex(), JointBuffer.View, 0.0);
-            // setBuffToValueDoubleKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, 0.0);
-            // setBuffToValueDoubleKern(FirstBuffer.Extent.ToIntIndex(), FirstBuffer.View, 0.0);
-            //Console.WriteLine(EntropyBuffer.GetAsArray1D()[0]);
-            //answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(Constants.LOG_BASE);
-            // Console.WriteLine("First and second norm:");
-            // print1d(SecondMinVal.GetAsArray1D());
-            // print1d(SecondNormBuffer.GetAsArray1D());
-            // Console.ReadLine();
 
             BuildJointFreqKern(
                 SecondNormBuffer.Extent.ToIntIndex(),
@@ -815,17 +755,9 @@ namespace CSMI
                 SecondNormBuffer.View,
                 JointBuffer.View
             );
-            //print2d(JointBuffer.GetAsArray2D());
-            //Console.WriteLine(EntropyBuffer.GetAsArray1D()[0]);
-            //answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(Constants.LOG_BASE);
+
             BuildFreqKern(SecondNormBuffer.Extent.ToIntIndex(), SecondNormBuffer.View, SecondCountMap.View);
-            //Console.WriteLine(EntropyBuffer.GetAsArray1D()[0]);
-            // Console.WriteLine("JOINT");
-            //print2d(JointBuffer.GetAsArray2D());
-            // Console.WriteLine("SecondCountMap");
-            //print1d(SecondCountMap.GetAsArray1D());
-            // /CalcConditionalEntropyKern(JointBuffer.Extent.ToIntIndex(), JointBuffer.View, SecondCountMap.View, EntropyBuffer.View, firstVector.GetLength(0));
-            //answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(Constants.LOG_BASE);
+
             IndexedCalcConditionalEntropyKern(
                 SecondNormBuffer.Extent.ToIntIndex(),
                 JointBuffer.View,
@@ -836,13 +768,6 @@ namespace CSMI
                 firstVector.GetLength(0)
             );
 
-            // Console.WriteLine("TESTTT");
-            // Console.WriteLine(EntropyBuffer.GetAsArray1D()[0]);
-            // Console.WriteLine(TestBuffer.GetAsArray1D()[0]);
-
-            // Console.WriteLine("ENTROPY ARR");
-            // print1d(EntropyBuffer.GetAsArray1D());
-            //double answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(Constants.LOG_BASE);
             answer = EntropyBuffer.GetAsArray1D()[0] / Math.Log(Constants.LOG_BASE);
             accelerate.Dispose();
             return answer;
