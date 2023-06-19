@@ -18,7 +18,6 @@ namespace CSMI
             {
                 Atomic.Max(ref MaxVal[new Index1D(0)], (int)Math.Floor(aView[index]));
                 Atomic.Min(ref MinVal[new Index1D(0)], (int)Math.Floor(aView[index]));
-                //Atomic.Add(ref MinVal[new Index1D(0)], 1);
             }
         }
 
@@ -31,20 +30,6 @@ namespace CSMI
         {
             MaxVal[index] = (int)Math.Floor(aView[new Index1D(0)]);
             MinVal[index] = (int)Math.Floor(aView[new Index1D(0)]);
-        }
-
-        protected static void BuildFreqAdjKernel(
-            Index1D index,
-            ArrayView1D<double, Stride1D.Dense> input,
-            ArrayView1D<double, Stride1D.Dense> output
-        )
-        {
-            if (!(Double.IsNaN(input[index])))
-            {
-                Atomic.Add(ref output[(int)Math.Floor(input[index])], 1.0);
-            }
-            //if(Math.Floor(input[index.X]) == Math.Floor(input[index.Y])){
-            //}
         }
 
         protected static void normalizeArrayKernel(
@@ -66,17 +51,8 @@ namespace CSMI
         {
             if (!(Double.IsNaN(first[index])) && !(Double.IsNaN(second[index])))
             {
-                //if(Math.Floor(first[index.X]) == Math.Floor(first[index.Y]) && Math.Floor(second[index.X]) == Math.Floor(second[index.Y])){
                 Atomic.Add(ref output[new Index2D((int)first[index], (int)second[index])], 1.0);
             }
-            //}
-            // if(Math.Floor(first[index.X]) == Math.Floor(first[index.Y])){
-            //     Atomic.Add(ref firstmap[index.X], 1.0);
-            // }
-
-            // if(Math.Floor(second[index.X]) == Math.Floor(second[index.Y])){
-            //     Atomic.Add(ref secondmap[index.X], 1.0);
-            // }
         }
 
         protected static void BuildJointFreqKernel2(
@@ -90,7 +66,9 @@ namespace CSMI
             if (!(Double.IsNaN(first[index])) && !(Double.IsNaN(second[index])))
             {
                 Atomic.Add(
-                    ref output[(Utils.szudzikPair((int)first[index] - minSzudzikPair, (int)second[index] - minSzudzikPair))],
+                    ref output[
+                        (Utils.szudzikPair((int)first[index] - minSzudzikPair, (int)second[index] - minSzudzikPair))
+                    ],
                     1.0
                 );
             }
@@ -109,7 +87,7 @@ namespace CSMI
             }
         }
 
-        ///<summary>Sets every element in buff to setvalue</summary>
+        ///<summary>Sets every element in <c>buff</c> to setvalue</summary>
         ///<param name="buff">buff</param>
         ///<param name="setvalue">setvalue</param>
         protected static void setBuffToValue2DKernal(
@@ -121,7 +99,7 @@ namespace CSMI
             buff[index] = setvalue;
         }
 
-        ///<summary>Sets every element in buff to setvalue</summary>
+        ///<summary>Sets every element in <c>buff</c> to setvalue</summary>
         ///<param name="buff">buff</param>
         ///<param name="setvalue">setvalue</param>
         protected static void setBuffToValueDoubleKernal(
@@ -133,15 +111,25 @@ namespace CSMI
             buff[index] = setvalue;
         }
 
+        protected static void BuildFreqAdjKernel(
+            Index1D index,
+            ArrayView1D<double, Stride1D.Dense> input,
+            ArrayView1D<double, Stride1D.Dense> output
+        )
+        {
+            if (!(Double.IsNaN(input[index])))
+            {
+                Atomic.Add(ref output[(int)Math.Floor(input[index])], 1.0);
+            }
+        }
+
         protected static void BuildFreqAdjustedKernel(
             Index1D index,
             ArrayView1D<double, Stride1D.Dense> input,
             ArrayView1D<double, Stride1D.Dense> output
         )
         {
-            //if(Math.Floor(input[index.X]) == Math.Floor(input[index.Y]) && Math.Floor(input[index.X]) != 0){
             Atomic.Add(ref output[new Index1D((int)(input[index]))], 1.0);
-            //}
         }
 
         protected static void TestGetMaxMinValKernal(
@@ -155,7 +143,6 @@ namespace CSMI
             {
                 Atomic.Max(ref MaxVal[new Index1D(0)], (int)Math.Floor(aView[index]));
                 Atomic.Min(ref MinVal[new Index1D(0)], (int)Math.Floor(aView[index]));
-                //Atomic.Add(ref MinVal[new Index1D(0)], 1);
             }
         }
     }

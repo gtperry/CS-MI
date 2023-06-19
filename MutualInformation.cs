@@ -12,7 +12,7 @@ namespace CSMI
 
         public MutualInformation(ILGPUInitializer ilgpu)
         {
-            gpu = ilgpu;
+            this.gpu = ilgpu;
         }
 
         #region Methods
@@ -558,8 +558,8 @@ namespace CSMI
             //outputVector = mergedBuffer.GetAsArray1D();
 
             setBuffToValueKern(StateCount.Extent.ToIntIndex(), StateCount.View, 1);
-            //print1d(FirstNormBuffer.GetAsArray1D());
-            //print1d(SecondNormBuffer.GetAsArray1D());
+            //Utils.print1d(FirstNormBuffer.GetAsArray1D());
+            //Utils.print1d(SecondNormBuffer.GetAsArray1D());
             //Console.ReadLine();
             mergeArraysKern(
                 mergedBuffer.Extent.ToIntIndex(),
@@ -574,11 +574,11 @@ namespace CSMI
             // mergeArraysKern(StateCount.Extent.ToIntIndex(), FirstNormBuffer.View, SecondNormBuffer.View, StateMap.View, mergedBuffer.View,StateCount.View, firstnumstates, FirstNormBuffer.Extent.ToIntIndex().X);
 
             //outputVector = mergedBuffer.GetAsArray1D();
-            // print1d(outputVector);
+            // Utils.print1d(outputVector);
             // Console.WriteLine("InHere");
-            // print1d(SecondNormBuffer.GetAsArray1D());
-            // print1d(FirstNormBuffer.GetAsArray1D());
-            //print1d(mergedBuffer.GetAsArray1D());
+            // Utils.print1d(SecondNormBuffer.GetAsArray1D());
+            // Utils.print1d(FirstNormBuffer.GetAsArray1D());
+            //Utils.print1d(mergedBuffer.GetAsArray1D());
             // Console.ReadLine();
             InitMaxMinKern(
                 PreMergeMaxVal.Extent.ToIntIndex(),
@@ -599,7 +599,7 @@ namespace CSMI
 
             using var HolderBuffer = accelerate.Allocate1D<double>(new Index1D(1));
             //accelerate.DefaultStream.Synchronize();
-            // print1d(PreMergeMinVal.GetAsArray1D());
+            // Utils.print1d(PreMergeMinVal.GetAsArray1D());
             // Console.ReadLine();
             // Console.WriteLine("HERHEREHERHERHEHREREH");
 
@@ -616,21 +616,21 @@ namespace CSMI
             //RefactorPart1Kern(mergedBuffer.Extent.ToIntIndex(), mergedBuffer.View, firstVector.GetLength(0));
             refactorPart1Phase1Kern(mergedBuffer.Extent.ToIntIndex(), mergedBuffer.View, TempBuffer.View);
             //Console.WriteLine(premergenumstates);
-            //print1d(PreMergeMaxVal.GetAsArray1D());
+            //Utils.print1d(PreMergeMaxVal.GetAsArray1D());
             //Console.ReadLine();
-            //print1d(TempBuffer.GetAsArray1D());
+            //Utils.print1d(TempBuffer.GetAsArray1D());
 
             refactorPart1Phase2Kern(mergedBuffer.Extent.ToIntIndex(), mergedBuffer.View, TempBuffer.View);
             //accelerate.DefaultStream.Synchronize();
-            //print1d(mergedBuffer.GetAsArray1D());
-            //print1d(mergedBuffer.GetAsArray1D());
+            //Utils.print1d(mergedBuffer.GetAsArray1D());
+            //Utils.print1d(mergedBuffer.GetAsArray1D());
             //Console.ReadLine();
 
             // Console.WriteLine("Part 1:");
             // Console.WriteLine(watch.ElapsedMilliseconds);
             // Console.ReadLine();
 
-            //print1d(mergedBuffer.GetAsArray1D());
+            //Utils.print1d(mergedBuffer.GetAsArray1D());
             //Console.WriteLine("Testtiong");
             //Console.ReadLine();
 
@@ -644,17 +644,17 @@ namespace CSMI
                 TempBuffer.View,
                 HolderBuffer.View
             );
-            //print1d(TempBuffer.GetAsArray1D());
-            //print1d(HolderBuffer.GetAsArray1D());
+            //Utils.print1d(TempBuffer.GetAsArray1D());
+            //Utils.print1d(HolderBuffer.GetAsArray1D());
             //Console.ReadLine();
 
             refactorPart2Phase2Kern(mergedBuffer.Extent.ToIntIndex(), mergedBuffer.View, TempBuffer.View);
 
-            //print1d(mergedBuffer.GetAsArray1D());
+            //Utils.print1d(mergedBuffer.GetAsArray1D());
             //Console.ReadLine();
             //AdjMergeBuffer.CopyFromCPU(refactorToMinimizeSize(mergedBuffer.GetAsArray1D()));
 
-            //print1d(mergedBuffer.GetAsArray1D());
+            //Utils.print1d(mergedBuffer.GetAsArray1D());
             //accelerate.DefaultStream.Synchronize();
 
             // Console.WriteLine("Refactor Arrs Part2:");
@@ -662,11 +662,11 @@ namespace CSMI
             //Console.WriteLine(watch.ElapsedMilliseconds);
             InitMaxMinKern(MergeMaxVal.Extent.ToIntIndex(), mergedBuffer.View, MergeMaxVal.View, MergeMinVal.View);
             GetMaxValKern(mergedBuffer.Extent.ToIntIndex(), mergedBuffer.View, MergeMaxVal.View, MergeMinVal.View);
-            //print1d(MergeMaxVal.GetAsArray1D());
+            //Utils.print1d(MergeMaxVal.GetAsArray1D());
 
-            // print1d(MergeMaxVal.GetAsArray1D());
-            // print1d(MergeMinVal.GetAsArray1D());
-            // print1d(mergedBuffer.GetAsArray1D());
+            // Utils.print1d(MergeMaxVal.GetAsArray1D());
+            // Utils.print1d(MergeMinVal.GetAsArray1D());
+            // Utils.print1d(mergedBuffer.GetAsArray1D());
             // Console.ReadLine();
 
             normalizeArrayKern(
@@ -693,7 +693,7 @@ namespace CSMI
 
             // Console.WriteLine(CountNonNaN.GetAsArray1D()[0]);
 
-            //print1d(mergedBuffer.GetAsArray1D());
+            //Utils.print1d(mergedBuffer.GetAsArray1D());
             //Console.ReadLine();
 
             using var JointBuffer1 = accelerate.Allocate2DDenseX<double>(
@@ -709,8 +709,8 @@ namespace CSMI
             using var CondCountMap = accelerate.Allocate1D<double>(new Index1D(condnumstates));
             using var MergeCountMap = accelerate.Allocate1D<double>(new Index1D(mergenumstates));
 
-            // print1d(CondNormBuffer.GetAsArray1D());
-            // print1d(MergeNormBuffer.GetAsArray1D());
+            // Utils.print1d(CondNormBuffer.GetAsArray1D());
+            // Utils.print1d(MergeNormBuffer.GetAsArray1D());
 
             BuildJointFreqKern(
                 CondNormBuffer.Extent.ToIntIndex(),
@@ -733,7 +733,7 @@ namespace CSMI
 
             BuildFreqKern(CondNormBuffer.Extent.ToIntIndex(), CondNormBuffer.View, CondCountMap.View);
             //EntropyBuffer1.GetAsArray1D();
-            //print1d(MergeNormBuffer.GetAsArray1D());
+            //Utils.print1d(MergeNormBuffer.GetAsArray1D());
             BuildFreqKern(MergeNormBuffer.Extent.ToIntIndex(), MergeNormBuffer.View, MergeCountMap.View);
             //EntropyBuffer1.GetAsArray1D();
 
@@ -773,7 +773,7 @@ namespace CSMI
         //     //Secondvector = first vector
         //     // conditionvector = second vector
         //     double firstCondEnt = calculateConditionalEntropy(secondVector, conditionVector);
-        //     //print1d(refactorToMinimizeSize(mergedVector));
+        //     //Utils.print1d(refactorToMinimizeSize(mergedVector));
 
         //     //second vector = first vector
         //     // merged vector = second vector
