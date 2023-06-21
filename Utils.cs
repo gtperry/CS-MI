@@ -74,6 +74,22 @@ namespace CSMI
             Console.WriteLine("]");
         }
 
+        public static double[] GenerateRandomNumbers(int length)
+        {
+            Random rand = new Random();
+            double[] numbers = new double[length];
+
+            for (int i = 0; i < length; i++)
+            {
+                // numbers[i] = rand.NextDouble() * 10;
+                // numbers[i] = rand.NextDouble() * 10000; // This works. Seems to be the limit (dependent on GPU memory).
+                // numbers[i] = rand.NextDouble() * 100000; // This fails because the numbers are too big and too far apart.
+                numbers[i] = rand.NextDouble() * 10 + 1000000; // This now works with bigger numbers, as long as they are close together.
+            }
+
+            return numbers;
+        }
+
         /// <summary>
         /// Szudzik pairing function to uniquely encode two natural numbers 
         /// into a single natural number with 100% packing efficiency.
