@@ -9,9 +9,9 @@ namespace CSMI
 {
     public class Entropy : CommonKernels
     {
-        private ILGPUInitializer gpu;
+        private ILGPUWrapper gpu;
 
-        public Entropy(ILGPUInitializer ilgpu)
+        public Entropy(ILGPUWrapper ilgpu)
         {
             this.gpu = ilgpu;
         }

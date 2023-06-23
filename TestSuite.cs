@@ -11,16 +11,16 @@ namespace CSMI
     /// </summary>
     public class TestSuite : IDisposable
     {
-        public ILGPUInitializer ILGPUInitializer { get; private set; }
+        public ILGPUWrapper ILGPUWrapper { get; private set; }
         public Entropy entropy { get; private set; }
         public MutualInformation mi { get; private set; }
         public List<string> failedTests { get; private set; } = new List<string>();
 
         public TestSuite()
         {
-            ILGPUInitializer = new ILGPUInitializer();
-            entropy = new Entropy(ILGPUInitializer);
-            mi = new MutualInformation(ILGPUInitializer);
+            ILGPUWrapper = new ILGPUWrapper();
+            entropy = new Entropy(ILGPUWrapper);
+            mi = new MutualInformation(ILGPUWrapper);
             // Quick calculation to get things started/initialized and measured time is not affected for the actual results
             // entropy.calculateEntropy(new double[] { 1, 2, 3 });
         }
@@ -28,7 +28,7 @@ namespace CSMI
         // Called automatically if using a `using` statement
         public void Dispose()
         {
-            ILGPUInitializer.Dispose();
+            ILGPUWrapper.Dispose();
         }
 
         public void runAllTests()

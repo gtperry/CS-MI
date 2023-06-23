@@ -8,9 +8,9 @@ namespace CSMI
 {
     public class MutualInformation : CommonKernels
     {
-        private ILGPUInitializer gpu;
+        private ILGPUWrapper gpu;
 
-        public MutualInformation(ILGPUInitializer ilgpu)
+        public MutualInformation(ILGPUWrapper ilgpu)
         {
             this.gpu = ilgpu;
         }

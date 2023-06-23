@@ -11,12 +11,12 @@ namespace CSMI
     }
 
     // TODO: Rename this to something better
-    public class ILGPUInitializer : IDisposable
+    public class ILGPUWrapper : IDisposable
     {
         public Device dev;
         public Context context;
 
-        public ILGPUInitializer()
+        public ILGPUWrapper()
         {
             this.context = Context.Create(builder => builder.AllAccelerators().EnableAlgorithms());
             this.dev = this.context.GetPreferredDevice(preferCPU: false);
