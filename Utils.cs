@@ -44,5 +44,64 @@ namespace CSMI
 
             return functionOutput;
         }
+
+        public static void print1d<T>(T[] array)
+        {
+            Console.WriteLine($"[{string.Join(", ", array)}]");
+        }
+
+        public static void print2d<T>(T[,] array)
+        {
+            Console.WriteLine("[");
+            for (int i = 0; i < array.GetLength(0); i++)
+            {
+                Console.Write("[");
+                for (int j = 0; j < array.GetLength(1); j++)
+                {
+                    Console.Write("{0}", array[i, j]);
+                    if (j < array.GetLength(1) - 1)
+                    {
+                        Console.Write(", ");
+                    }
+                }
+                Console.Write("]");
+                if (i < array.GetLength(0) - 1)
+                {
+                    Console.WriteLine(",");
+                }
+            }
+            Console.WriteLine();
+            Console.WriteLine("]");
+        }
+
+        public static double[] GenerateRandomNumbers(int length)
+        {
+            Random rand = new Random();
+            double[] numbers = new double[length];
+
+            for (int i = 0; i < length; i++)
+            {
+                // numbers[i] = rand.NextDouble() * 10;
+                // numbers[i] = rand.NextDouble() * 10000; // This works. Seems to be the limit (dependent on GPU memory).
+                // numbers[i] = rand.NextDouble() * 100000; // This fails because the numbers are too big and too far apart.
+                numbers[i] = rand.NextDouble() * 10 + 1000000; // This now works with bigger numbers, as long as they are close together.
+            }
+
+            return numbers;
+        }
+
+        /// <summary>
+        /// Szudzik pairing function to uniquely encode two natural numbers 
+        /// into a single natural number with 100% packing efficiency.
+        /// This version only works with positive numbers.
+        /// <br/>Source: https://www.vertexfragment.com/ramblings/cantor-szudzik-pairing-functions/
+        /// </summary>
+        /// <param name="x">First number</param>
+        /// <param name="y">Second number</param>
+        /// <returns></returns>
+        public static long szudzikPair(long x, long y)
+        {
+            return (x >= y ? (x * x) + x + y : (y * y) + x);
+        }
     }
 }
