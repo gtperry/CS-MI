@@ -79,6 +79,36 @@ namespace CSMI
             Console.WriteLine(Environment.NewLine + new string('-', 15) + Environment.NewLine);
         }
 
+        protected void compareResults(
+            double[] resultsList,
+            Dictionary<int, (string name, double javaResult)> javaResultsMap,
+            int decimalPlaces = 12,
+            [CallerMemberName] string callerName = ""
+        )
+        {
+            // See if the functions for the C# vs Java implementation are the same
+            Console.WriteLine(
+                $"{Environment.NewLine}Java vs C# return values test results, accurate to '{decimalPlaces}' decimal places:"
+            );
+            for (int i = 0; i < resultsList.Length; i++)
+            {
+                var csharpResult = Math.Round(resultsList[i], decimalPlaces);
+                var javaResult = Math.Round(javaResultsMap[i].javaResult, decimalPlaces);
+                string testOutcome;
+                if ((csharpResult == javaResult))
+                {
+                    testOutcome = "PASS";
+                }
+                else
+                {
+                    testOutcome = "\x1b[41mFAIL\x1b[0m";
+                    failedTests.Add($"{callerName}, {javaResultsMap[i].name} -> Expected: {javaResult}, Actual: {csharpResult}");
+                }
+
+                Console.WriteLine($"{i}) {javaResultsMap[i].name}: {testOutcome}");
+            }
+        }
+
         /// <summary>
         /// This function runs tests against the Java implementation of this library to ensure that the results are reproducible.
         /// </summary>
@@ -86,10 +116,7 @@ namespace CSMI
         {
             // Fixed data for reproducible results
             double[] a = new[] { 4.2, 5.43, 3.221, 7.34235, 1.931, 1.2, 5.43, 8.0, 7.34235, 1.931 };
-            // double[] a = new[] { 4.2, -5.43, -3.221, -7.34235, -1.931, -1.2, -5.43, -8.0, -7.34235, -1.931 };
             double[] b = new[] { 2.2, 3.43, 1.221, 9.34235, 7.931, 7.2, 4.43, 7.0, 7.34235, 34.931 };
-            // double[] a = new[] { 1.2, 2.4, 1.1, 3.1, 4.1, 5.1, 6.1, 7.1, 8.1, 9.1 };
-            // double[] b = new[] { 2.2, 2.4, 2.1, 3.1, 4.1, 5.1, 6.1, 7.1, 8.1, 9.1 };
             double[] c = new[] { 2.2, 3.43, 2.221, 2.34235, 3.931, 3.2, 4.43, 7.0, 7.34235, 34.931 };
 
             // Test with bigger values
@@ -135,36 +162,6 @@ namespace CSMI
                 var csharpResult = Math.Round(resultsList[i], decimalPlaces);
                 var javaResult = Math.Round(javaResultsMap[i].javaResult, decimalPlaces);
                 var testOutcome = (csharpResult == javaResult) ? "PASS" : "FAIL";
-                Console.WriteLine($"{i}) {javaResultsMap[i].name}: {testOutcome}");
-            }
-        }
-
-        protected void compareResults(
-            double[] resultsList,
-            Dictionary<int, (string name, double javaResult)> javaResultsMap,
-            int decimalPlaces = 12,
-            [CallerMemberName] string callerName = ""
-        )
-        {
-            // See if the functions for the C# vs Java implementation are the same
-            Console.WriteLine(
-                $"{Environment.NewLine}Java vs C# return values test results, accurate to '{decimalPlaces}' decimal places:"
-            );
-            for (int i = 0; i < resultsList.Length; i++)
-            {
-                var csharpResult = Math.Round(resultsList[i], decimalPlaces);
-                var javaResult = Math.Round(javaResultsMap[i].javaResult, decimalPlaces);
-                string testOutcome;
-                if ((csharpResult == javaResult))
-                {
-                    testOutcome = "PASS";
-                }
-                else
-                {
-                    testOutcome = "\x1b[41mFAIL\x1b[0m";
-                    failedTests.Add($"{callerName}, {javaResultsMap[i].name} -> Expected: {javaResult}, Actual: {csharpResult}");
-                }
-
                 Console.WriteLine($"{i}) {javaResultsMap[i].name}: {testOutcome}");
             }
         }
